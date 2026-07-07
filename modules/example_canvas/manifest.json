@@ -1,0 +1,21 @@
+{
+    "manifest_version": 2.0,
+    "id": "example_canvas",
+    "type": "widget",
+    "name": "Canvas playground",
+    "namespace": "ExampleCanvas",
+    "version": "1.0",
+    "author": "Oscar",
+    "actions": {
+        "widget.example_canvas.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetExampleCanvas"
+    },
+    "assets": {
+        "css": ["widget.css"],
+        "js": ["class.widget.base.js", "class.widget.js"]
+    }
+}

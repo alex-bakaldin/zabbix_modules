@@ -1,0 +1,21 @@
+{
+    "manifest_version": 2.0,
+    "id": "example_manometer",
+    "type": "widget",
+    "name": "Manometer (canvas)",
+    "namespace": "ExampleManometer",
+    "version": "1.0",
+    "author": "Oscar",
+    "actions": {
+        "widget.example_manometer.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetExampleManometer"
+    },
+    "assets": {
+        "css": ["widget.css"],
+        "js": ["class.widget.base.js", "class.gauge.base.js", "class.widget.js"]
+    }
+}

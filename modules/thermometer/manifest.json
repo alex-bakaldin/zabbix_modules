@@ -1,0 +1,21 @@
+{
+    "manifest_version": 2.0,
+    "id": "thermometer",
+    "type": "widget",
+    "name": "Thermometer (canvas)",
+    "namespace": "Thermometer",
+    "version": "1.0",
+    "author": "Oscar",
+    "actions": {
+        "widget.thermometer.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetThermometer"
+    },
+    "assets": {
+        "css": ["widget.css"],
+        "js": ["class.widget.base.js", "class.gauge.base.js", "class.widget.js"]
+    }
+}

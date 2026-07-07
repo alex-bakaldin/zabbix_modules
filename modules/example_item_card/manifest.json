@@ -1,0 +1,21 @@
+{
+    "manifest_version": 2.0,
+    "id": "example_item_card",
+    "type": "widget",
+    "name": "Item value card",
+    "namespace": "ExampleItemCard",
+    "version": "1.0",
+    "author": "Oscar",
+    "actions": {
+        "widget.example_item_card.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetExampleItemCard"
+    },
+    "assets": {
+        "css": ["widget.css"],
+        "js": ["class.widget.js"]
+    }
+}

@@ -1,0 +1,9 @@
+div.dashboard-widget-example_canvas {
+    padding: 0;
+}
+
+div.dashboard-widget-example_canvas .canvas-widget-surface {
+    display: block;
+    width: 100%;
+    height: 100%;
+}

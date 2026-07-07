@@ -1,0 +1,68 @@
+div.dashboard-widget-example_item_card {
+    display: grid;
+    grid-template-rows: 1fr;
+    padding: 0;
+}
+
+div.dashboard-widget-example_item_card .item-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+    text-align: center;
+    overflow: hidden;
+}
+
+div.dashboard-widget-example_item_card .item-card-description {
+    font-size: 1.4em;
+    line-height: 1.2;
+    color: #768d99;
+}
+
+div.dashboard-widget-example_item_card .item-card-value {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 6px;
+    line-height: 1.1;
+    max-width: 100%;
+}
+
+div.dashboard-widget-example_item_card .item-card-number {
+    font-size: 3.2em;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+div.dashboard-widget-example_item_card .item-card-units {
+    font-size: 1.6em;
+    color: #768d99;
+}
+
+div.dashboard-widget-example_item_card .item-card-trend {
+    font-size: 1.6em;
+    align-self: center;
+}
+
+div.dashboard-widget-example_item_card .item-card-trend.trend-up {
+    color: #d24b4b;
+}
+
+div.dashboard-widget-example_item_card .item-card-trend.trend-down {
+    color: #59db8f;
+}
+
+div.dashboard-widget-example_item_card .item-card-trend.trend-flat {
+    color: #768d99;
+}
+
+div.dashboard-widget-example_item_card .item-card-nodata {
+    font-size: 1.8em;
+    color: #768d99;
+}
