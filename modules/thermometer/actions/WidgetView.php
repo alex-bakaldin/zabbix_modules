@@ -4,7 +4,10 @@ namespace Modules\Thermometer\Actions;
 
 use API,
     CControllerDashboardWidgetView,
-    CControllerResponseData;
+    CControllerResponseData,
+    CMacrosResolverHelper,
+    CNumberParser,
+    CParser;
 
 /**
  * Thermometer widget controller (multi-item).
@@ -46,6 +49,11 @@ class WidgetView extends CControllerDashboardWidgetView {
             [$auto_min, $auto_max] = $this->sharedAutoRange($db_items);
         }
 
+        // Fixed Min/Max and thresholds are one shared config, but a user macro in them
+        // ({$TEMP.MAX} etc.) may resolve to a DIFFERENT number on each item's host — so
+        // every item carries its own resolved min/max/thresholds.
+        $items = $this->attachResolvedConfig($items, $db_items);
+
         $this->setResponse(new CControllerResponseData([
             'name' => $this->getInput('name', $this->widget->getDefaultName()),
             'items' => $items,
@@ -58,6 +66,72 @@ class WidgetView extends CControllerDashboardWidgetView {
         ]));
     }
 
+    /**
+     * Resolve the fixed Min/Max and threshold values PER ITEM: the same config strings
+     * are expanded against each item's own host (user macros may differ per host), then
+     * parsed into numbers. Each item gets 'min', 'max' and a sorted 'thresholds' list.
+     */
+    private function attachResolvedConfig(array $items, array $db_items): array {
+        $thresholds_raw = $this->fields_values['thresholds'];
+
+        $strings = [
+            'value_min' => (string) $this->fields_values['value_min'],
+            'value_max' => (string) $this->fields_values['value_max']
+        ];
+        foreach ($thresholds_raw as $i => $threshold) {
+            $strings['th_'.$i] = (string) $threshold['threshold'];
+        }
+
+        // Resolve the same strings against every item's host in one batched call
+        // (resolveItemBasedWidgetMacros keys the result by itemid and uses each hostid).
+        $to_resolve = [];
+        foreach ($db_items as $db_item) {
+            $to_resolve[$db_item['itemid']] = ['hostid' => $db_item['hostid']] + $strings;
+        }
+        $resolved = $to_resolve
+            ? CMacrosResolverHelper::resolveItemBasedWidgetMacros(
+                $to_resolve,
+                array_combine(array_keys($strings), array_keys($strings))
+            )
+            : [];
+
+        $number_parser = new CNumberParser(['with_size_suffix' => true, 'with_time_suffix' => true]);
+        $parse = static function (string $str) use ($number_parser): ?float {
+            if (trim($str) === '') {
+                return null;
+            }
+
+            return $number_parser->parse($str) == CParser::PARSE_SUCCESS
+                ? (float) $number_parser->calcValue()
+                : null;
+        };
+
+        foreach ($items as &$item) {
+            $r = $resolved[$item['itemid']] ?? $strings;
+
+            $item['min'] = $parse($r['value_min']);
+            $item['max'] = $parse($r['value_max']);
+
+            $thresholds = [];
+            foreach ($thresholds_raw as $i => $threshold) {
+                $value = $parse($r['th_'.$i]);
+
+                if ($value !== null) {
+                    $thresholds[] = [
+                        'value' => $value,
+                        'color' => '#'.ltrim((string) $threshold['color'], '#')
+                    ];
+                }
+            }
+            usort($thresholds, static fn(array $a, array $b) => $a['value'] <=> $b['value']);
+
+            $item['thresholds'] = $thresholds;
+        }
+        unset($item);
+
+        return $items;
+    }
+
     private function resolveItems(string $templateid, string $override_hostid): array {
         $item_patterns = $this->fields_values['items'];
 
@@ -66,7 +140,7 @@ class WidgetView extends CControllerDashboardWidgetView {
         }
 
         $options = [
-            'output' => ['itemid', 'name', 'value_type', 'units', 'lastvalue', 'lastclock'],
+            'output' => ['itemid', 'hostid', 'name', 'value_type', 'units', 'lastvalue', 'lastclock'],
             'selectHosts' => ['name'],
             'webitems' => true,
             // Термометр показывает только числовые айтемы — нечисловые (text/log/char)

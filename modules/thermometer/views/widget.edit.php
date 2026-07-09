@@ -25,8 +25,8 @@ $form
     ->addField(new CWidgetFieldTagsView($data['fields']['item_tags']))
     ->addField(new CWidgetFieldMultiSelectOverrideHostView($data['fields']['override_hostid']))
     ->addField(new CWidgetFieldSelectView($data['fields']['range_mode']))
-    ->addField(new CWidgetFieldNumericBoxView($data['fields']['value_min']))
-    ->addField(new CWidgetFieldNumericBoxView($data['fields']['value_max']))
+    ->addField(new CWidgetFieldTextBoxView($data['fields']['value_min']))
+    ->addField(new CWidgetFieldTextBoxView($data['fields']['value_max']))
     ->addField(new CWidgetFieldTextBoxView($data['fields']['units']))
     ->addField(new CWidgetFieldIntegerBoxView($data['fields']['value_decimals']))
     ->addField(new CWidgetFieldSelectView($data['fields']['value_pos']))
@@ -34,4 +34,6 @@ $form
     ->addField(new CWidgetFieldIntegerBoxView($data['fields']['autoscroll']))
     ->addField(new CWidgetFieldCheckBoxView($data['fields']['show_bulb']))
     ->addField(new CWidgetFieldColorView($data['fields']['mercury_color']))
+    ->addField(new CWidgetFieldThresholdsView($data['fields']['thresholds']))
+    ->addField(new CWidgetFieldCheckBoxView($data['fields']['threshold_interpolate']))
     ->show();

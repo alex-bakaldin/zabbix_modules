@@ -19,12 +19,15 @@ class WidgetThermometer extends CWidgetGaugeBase {
         super.onInitialize();
         this._scroll = 0;
         this._scroll_target = 0;
+        this._auto_dir = 1;         // направление автоскролла (пинг-понг, без зацикливания)
         this._dragging = false;
         this._drag_x0 = 0;
         this._drag_scroll0 = 0;
         this._slot_w = 1;
         this._drag_bound = false;
         this._hovering = false;
+        this._hover_x = null;       // X курсора в canvas (для выбора фокуса, когда всё влезает)
+        this._fits = false;         // все айтемы помещаются по ширине → статичная раскладка
     }
 
     setContents(response) {
@@ -44,7 +47,10 @@ class WidgetThermometer extends CWidgetGaugeBase {
         return (this._data && Array.isArray(this._data.items)) ? this._data.items : [];
     }
 
-    _sharedRange() {
+    // Диапазон КОНКРЕТНОГО айтема: общий auto (посчитан контроллером) в auto-режиме,
+    // иначе fixed min/max — уже с раскрытыми макросами В КОНТЕКСТЕ ХОСТА ЭТОГО айтема
+    // (на разных хостах {$MACRO} может дать разные значения).
+    _itemRange(item) {
         const f = this._cfg();
         if (Number(f.range_mode) === 1 && this._data
                 && this._data.auto_min !== null && this._data.auto_min !== undefined
@@ -55,9 +61,68 @@ class WidgetThermometer extends CWidgetGaugeBase {
                 return {min: lo, max: hi};
             }
         }
-        const min = Number(f.value_min);
-        const max = Number(f.value_max);
+        const min = Number(item.min);
+        const max = Number(item.max);
         return {min: Number.isFinite(min) ? min : 0, max: Number.isFinite(max) ? max : 100};
+    }
+
+    // Цвет всей ртутной колонки для значения v: базовый цвет ртути, пока v ниже
+    // первого порога; по достижению порога — весь столбик перекрашивается в его цвет.
+    // При интерполяции цвет плавно переходит между порогами (базовый цвет — якорь у min).
+    // thresholds — пороги ЭТОГО айтема (раскрыты по его хосту).
+    _mercuryColor(v, base_hex, min, interpolate, thresholds) {
+        const th = Array.isArray(thresholds) ? thresholds : [];
+        if (th.length === 0 || !Number.isFinite(v)) {
+            return base_hex;
+        }
+
+        if (!interpolate) {
+            let color = base_hex;
+            for (const t of th) {
+                if (v >= Number(t.value)) {
+                    color = t.color;
+                }
+            }
+            return color;
+        }
+
+        // Якоря по возрастанию: [базовый@min, ...пороги]. Между соседними — линейная смесь.
+        const pts = [{value: Number.isFinite(min) ? min : Number(th[0].value), color: base_hex}]
+            .concat(th.map((t) => ({value: Number(t.value), color: t.color})));
+
+        if (v <= pts[0].value) {
+            return pts[0].color;
+        }
+        if (v >= pts[pts.length - 1].value) {
+            return pts[pts.length - 1].color;
+        }
+        for (let i = 0; i < pts.length - 1; i++) {
+            if (v < pts[i + 1].value) {
+                const span = pts[i + 1].value - pts[i].value;
+                const t = span > 0 ? (v - pts[i].value) / span : 0;
+                return this._lerpColor(pts[i].color, pts[i + 1].color, t);
+            }
+        }
+        return pts[pts.length - 1].color;
+    }
+
+    _rgb(hex) {
+        const h = String(hex).replace('#', '');
+        return {
+            r: parseInt(h.substr(0, 2), 16),
+            g: parseInt(h.substr(2, 2), 16),
+            b: parseInt(h.substr(4, 2), 16)
+        };
+    }
+
+    // Возвращает hex (#rrggbb), чтобы результат годился для _shade() при построении градиента.
+    _lerpColor(a_hex, b_hex, t) {
+        const a = this._rgb(a_hex);
+        const b = this._rgb(b_hex);
+        const k = Math.max(0, Math.min(1, t));
+        const m = (x, y) => Math.round(x + (y - x) * k);
+        const hx = (v) => v.toString(16).padStart(2, '0');
+        return `#${hx(m(a.r, b.r))}${hx(m(a.g, b.g))}${hx(m(a.b, b.b))}`;
     }
 
     draw(ctx, {width, height, dt, time}) {
@@ -75,32 +140,15 @@ class WidgetThermometer extends CWidgetGaugeBase {
 
         const n = items.length;
         const f = this._cfg();
-        const autoscroll = Math.max(0, Number(f.autoscroll) || 0);   // секунд на полный цикл
+        const autoscroll = Math.max(0, Number(f.autoscroll) || 0);   // секунд на полный ход
 
-        // Движение карусели.
-        if (!this._dragging) {
-            if (autoscroll > 0 && n > 1 && !this._hovering) {
-                this._scroll += (n / autoscroll) * dt;          // плавный автоскролл (пауза при наведении)
-                this._scroll_target = this._scroll;
-            }
-            else {
-                this._scroll += (this._scroll_target - this._scroll) * Math.min(1, dt * 8);
-            }
-        }
-        if (n > 1) {
-            this._scroll = ((this._scroll % n) + n) % n;         // зацикливание
-        }
-        else {
-            this._scroll = 0;
-        }
-
-        const {min, max} = this._sharedRange();
         const decimals = Number(f.value_decimals);
         const show_bulb = Number(f.show_bulb) !== 0;
         const merc_hex = '#' + (f.mercury_color || 'D81B18');
         const units_override = f.units || '';
         const value_pos = Number(f.value_pos);
         const value_track = Number(f.value_track) !== 0;
+        const interpolate = Number(f.threshold_interpolate) !== 0;
 
         // Вертикальная раскладка.
         const nameH = height * 0.16;
@@ -119,12 +167,58 @@ class WidgetThermometer extends CWidgetGaugeBase {
         const full_tube_w = Math.min(slot_w * 0.34, fullH * 0.13);
         const thr = slot_w * 0.6;
 
-        // Раскладка (бесконечный цикл вокруг центра).
-        const focused_k = Math.round(this._scroll);
-        const half = (n > 1) ? Math.ceil(width / (2 * slot_w)) + 1 : 0;
+        // Каждый айтем показывается РОВНО один раз (без зацикливания/размножения).
+        // Если все влезают по ширине — центрируем набор; иначе прокрутка ограничена [0, n-1].
+        const fits = n * slot_w <= width + 0.5;
+        this._fits = fits;
+        // Границы прокрутки. Разворот пинг-понга — когда крайний айтем доехал до края
+        // и отрисовался ЦЕЛИКОМ в полный размер (его центр на расстоянии thr от края,
+        // где edge >= thr → без ужимания), а не когда он оказался в фокусе по центру.
+        const edge_margin = Math.max(0, (width / 2 - thr) / slot_w);
+        let s_min = edge_margin;
+        let s_max = (n - 1) - edge_margin;
+        if (s_max < s_min) {
+            s_min = s_max = (n - 1) / 2;
+        }
+        this._s_min = s_min;
+        this._s_max = s_max;
+        const clamp = (v) => Math.max(s_min, Math.min(s_max, v));
+
+        // Движение карусели.
+        if (fits) {
+            this._scroll = (n - 1) / 2;                     // центрируем весь набор
+            this._scroll_target = this._scroll;
+        }
+        else if (this._dragging) {
+            this._scroll = clamp(this._scroll);
+        }
+        else if (autoscroll > 0 && !this._hovering) {
+            // Пинг-понг: доезжаем до края (крайний полностью виден) и разворачиваемся.
+            this._scroll += this._auto_dir * ((s_max - s_min) / autoscroll) * dt;
+            if (this._scroll >= s_max) {
+                this._scroll = s_max;
+                this._auto_dir = -1;
+            }
+            else if (this._scroll <= s_min) {
+                this._scroll = s_min;
+                this._auto_dir = 1;
+            }
+            this._scroll_target = this._scroll;
+        }
+        else {
+            this._scroll += (this._scroll_target - this._scroll) * Math.min(1, dt * 8);
+            this._scroll = clamp(this._scroll);
+        }
+
+        // Точка фокуса — курсор при наведении (в т.ч. в активной карусели: так можно
+        // сфокусировать и назвать любой видимый градусник, включая крайние), иначе центр.
+        const focusX = (this._hovering && this._hover_x !== null)
+            ? Math.max(0, Math.min(width, this._hover_x))
+            : cx;
+
+        // Раскладка: перебираем все айтемы один раз, отбрасываем ушедшие за кадр.
         const layout = [];
-        for (let k = focused_k - half; k <= focused_k + half; k++) {
-            const idx = ((k % n) + n) % n;
+        for (let k = 0; k < n; k++) {
             const p = k - this._scroll;
             const x = cx + p * slot_w;
             if (x < -slot_w * 0.6 || x > width + slot_w * 0.6) {
@@ -145,9 +239,12 @@ class WidgetThermometer extends CWidgetGaugeBase {
             if (alpha <= 0.03) {
                 continue;
             }
-            const focus = Math.max(0, 1 - Math.abs(p));       // 1 в центре → «шире»
-            scale *= 1 + 0.1 * focus;
-            layout.push({idx, x, scale, alpha, d: Math.abs(p)});
+            // Фокус влияет ТОЛЬКО на ширину (айтем в фокусе «чуть шире»), но НЕ на высоту —
+            // иначе у него поднимается верхушка и значение сверху уезжает за кадр.
+            const focus = Math.max(0, 1 - Math.abs(x - focusX) / slot_w);
+            // Сфокусированный (в т.ч. наведённый крайний) не должен гаснуть у края.
+            alpha = Math.min(1, alpha + 0.75 * focus);
+            layout.push({idx: k, x, scale, alpha, focus, d: Math.abs(x - focusX)});
         }
         layout.sort((a, b) => b.d - a.d);
 
@@ -157,6 +254,7 @@ class WidgetThermometer extends CWidgetGaugeBase {
 
         for (const L of layout) {
             const item = items[L.idx];
+            const {min, max} = this._itemRange(item);       // диапазон/пороги — свои у каждого айтема
             const tubeTop = baseY - fullH * L.scale;
             ctx.save();
             ctx.globalAlpha = L.alpha;
@@ -164,7 +262,7 @@ class WidgetThermometer extends CWidgetGaugeBase {
                 cx: L.x,
                 tubeTop,
                 baseY,
-                tubeW: full_tube_w * L.scale,
+                tubeW: full_tube_w * L.scale * (1 + 0.35 * L.focus),   // фокус-бонус — по ширине
                 item,
                 min,
                 max,
@@ -175,27 +273,40 @@ class WidgetThermometer extends CWidgetGaugeBase {
                 dark,
                 withScale: L.scale > 0.98,
                 value_pos,       // «перо»/значение — на КАЖДОМ градуснике
-                value_track
+                value_track,
+                interpolate,
+                thresholds: Array.isArray(item.thresholds) ? item.thresholds : []
             });
             ctx.restore();
         }
         ctx.globalAlpha = 1;
 
         // Имя сфокусированного айтема — плашка со стрелкой на его градусник.
+        // Когда значение показывается СНИЗУ, плашку уводим НАВЕРХ (стрелкой вниз), иначе
+        // она перекрывает нижние значения. В остальных случаях — снизу, стрелкой вверх, и
+        // чуть НИЖЕ шарика (шарик упирается в baseY), чтобы стрелку не накрывал шарик фокуса.
+        const plaqueArrowH = 6;
+        const plaqueBh = 23;                    // = fs(13) + 10 внутри _drawNamePlaque
+        const plaque_top = (value_pos === VALUE_POS_BOTTOM);
+        const plaqueCy = plaque_top
+            ? (plaqueBh / 2 + 2)
+            : (baseY + plaqueArrowH + plaqueBh / 2 + 2);
         if (focused) {
             const fitem = items[focused.idx];
             const label = fitem.name + (fitem.host ? '  ·  ' + fitem.host : '');
-            this._drawNamePlaque(ctx, focused.x, baseY + nameH * 0.36, label, dark, width);
+            this._drawNamePlaque(ctx, focused.x, plaqueCy, label, dark, width, plaque_top);
         }
 
-        if (n > 1) {
-            this._drawDots(ctx, width, baseY + nameH * 0.82, n, ((focused_k % n) + n) % n, dark);
+        // Точки-индикатор нужны только когда есть что прокручивать.
+        if (!fits && n > 1) {
+            const dotsY = plaque_top ? (height - 5) : (plaqueCy + plaqueBh / 2 + 5);
+            this._drawDots(ctx, width, dotsY, n, focused ? focused.idx : 0, dark);
         }
     }
 
     _drawOne(ctx, o) {
         const {cx, tubeTop, baseY, tubeW, item, min, max, decimals, units, show_bulb, merc_hex, dark,
-            withScale, value_pos, value_track} = o;
+            withScale, value_pos, value_track, interpolate, thresholds} = o;
 
         const rad = tubeW / 2;
         const mw = rad * 0.55;
@@ -216,6 +327,8 @@ class WidgetThermometer extends CWidgetGaugeBase {
 
         const has_val = item.value !== null && item.value !== undefined && Number.isFinite(Number(item.value));
         const v = has_val ? Number(item.value) : min;
+        // Весь столбик ртути перекрашивается по достигнутому порогу (пороги — свои у айтема).
+        const merc_color = has_val ? this._mercuryColor(v, merc_hex, min, interpolate, thresholds) : merc_hex;
         const frac = (max === min) ? 0 : Math.min(1, Math.max(0, (v - min) / (max - min)));
         const fillY = yMin - frac * span;
         const yAt = (vv) => yMin - ((vv - min) / (max - min)) * span;
@@ -266,9 +379,9 @@ class WidgetThermometer extends CWidgetGaugeBase {
 
         // Ртуть (клип по трубке)
         const merc = ctx.createLinearGradient(cx - rad, 0, cx + rad, 0);
-        merc.addColorStop(0, this._shade(merc_hex, 70));
-        merc.addColorStop(0.5, merc_hex);
-        merc.addColorStop(1, this._shade(merc_hex, -70));
+        merc.addColorStop(0, this._shade(merc_color, 70));
+        merc.addColorStop(0.5, merc_color);
+        merc.addColorStop(1, this._shade(merc_color, -70));
         ctx.save();
         tubePath();
         if (show_bulb) {
@@ -339,6 +452,24 @@ class WidgetThermometer extends CWidgetGaugeBase {
             }
         }
 
+        // Метки порогов на шкале (цветные треугольники слева от трубки).
+        if (thresholds && thresholds.length) {
+            for (const t of thresholds) {
+                const tv = Number(t.value);
+                if (tv < min || tv > max) {
+                    continue;
+                }
+                const ty = yAt(tv);
+                ctx.fillStyle = t.color;
+                ctx.beginPath();
+                ctx.moveTo(cx - rad - 1, ty);
+                ctx.lineTo(cx - rad - 7, ty - 4);
+                ctx.lineTo(cx - rad - 7, ty + 4);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
         // Значение (по value_pos)
         const vf = Math.max(9, (baseY - tubeTop) * 0.1);
         const text = (has_val ? this._fmt(v, decimals) : '—') + (units ? ' ' + units : '');
@@ -358,7 +489,7 @@ class WidgetThermometer extends CWidgetGaugeBase {
         else if (value_pos === VALUE_POS_LEFT || value_pos === VALUE_POS_RIGHT) {
             const dir = value_pos === VALUE_POS_RIGHT ? 1 : -1;
             if (value_track) {
-                this._drawMarker(ctx, cx + dir * rad, fillY, dir, text, merc_hex, Math.round(vf));
+                this._drawMarker(ctx, cx + dir * rad, fillY, dir, text, merc_color, Math.round(vf));
             }
             else {
                 ctx.font = `700 ${Math.round(vf)}px Arial, sans-serif`;
@@ -424,8 +555,10 @@ class WidgetThermometer extends CWidgetGaugeBase {
         ctx.fillText(text, (x0 + x1) / 2, y);
     }
 
-    // Плашка с именем айтема и министрелкой вверх на его градусник.
-    _drawNamePlaque(ctx, thermoX, cy, text, dark, width) {
+    // Плашка с именем айтема и министрелкой на его градусник.
+    // point_down=true → стрелка снизу плашки, указывает ВНИЗ (плашка над градусниками,
+    // режим «значение снизу»); иначе стрелка сверху, указывает ВВЕРХ (плашка под шариком).
+    _drawNamePlaque(ctx, thermoX, cy, text, dark, width, point_down) {
         const fs = 13;
         ctx.font = `${fs}px Arial, sans-serif`;
         const maxW = width * 0.9;
@@ -440,24 +573,43 @@ class WidgetThermometer extends CWidgetGaugeBase {
         const bx = Math.max(4, Math.min(width - bw - 4, thermoX - bw / 2));
         const arrowX = Math.max(bx + 10, Math.min(bx + bw - 10, thermoX));
         const arrowH = 6;
+        const top = cy - bh / 2;
+        const bot = cy + bh / 2;
 
         ctx.save();
         ctx.fillStyle = dark ? 'rgba(58,70,80,0.92)' : 'rgba(255,255,255,0.94)';
         ctx.strokeStyle = dark ? 'rgba(199,210,218,0.4)' : 'rgba(51,64,74,0.25)';
         ctx.lineWidth = 1;
-        // стрелка вверх + плашка одним контуром
         ctx.beginPath();
-        ctx.moveTo(arrowX, cy - bh / 2 - arrowH);
-        ctx.lineTo(arrowX + 6, cy - bh / 2);
-        ctx.lineTo(bx + bw - 4, cy - bh / 2);
-        ctx.arcTo(bx + bw, cy - bh / 2, bx + bw, cy - bh / 2 + 4, 4);
-        ctx.lineTo(bx + bw, cy + bh / 2 - 4);
-        ctx.arcTo(bx + bw, cy + bh / 2, bx + bw - 4, cy + bh / 2, 4);
-        ctx.lineTo(bx + 4, cy + bh / 2);
-        ctx.arcTo(bx, cy + bh / 2, bx, cy + bh / 2 - 4, 4);
-        ctx.lineTo(bx, cy - bh / 2 + 4);
-        ctx.arcTo(bx, cy - bh / 2, bx + 4, cy - bh / 2, 4);
-        ctx.lineTo(arrowX - 6, cy - bh / 2);
+        if (point_down) {
+            // плашка + стрелка ВНИЗ на нижней грани
+            ctx.moveTo(bx + 4, top);
+            ctx.lineTo(bx + bw - 4, top);
+            ctx.arcTo(bx + bw, top, bx + bw, top + 4, 4);
+            ctx.lineTo(bx + bw, bot - 4);
+            ctx.arcTo(bx + bw, bot, bx + bw - 4, bot, 4);
+            ctx.lineTo(arrowX + 6, bot);
+            ctx.lineTo(arrowX, bot + arrowH);
+            ctx.lineTo(arrowX - 6, bot);
+            ctx.lineTo(bx + 4, bot);
+            ctx.arcTo(bx, bot, bx, bot - 4, 4);
+            ctx.lineTo(bx, top + 4);
+            ctx.arcTo(bx, top, bx + 4, top, 4);
+        }
+        else {
+            // плашка + стрелка ВВЕРХ на верхней грани
+            ctx.moveTo(arrowX, top - arrowH);
+            ctx.lineTo(arrowX + 6, top);
+            ctx.lineTo(bx + bw - 4, top);
+            ctx.arcTo(bx + bw, top, bx + bw, top + 4, 4);
+            ctx.lineTo(bx + bw, bot - 4);
+            ctx.arcTo(bx + bw, bot, bx + bw - 4, bot, 4);
+            ctx.lineTo(bx + 4, bot);
+            ctx.arcTo(bx, bot, bx, bot - 4, 4);
+            ctx.lineTo(bx, top + 4);
+            ctx.arcTo(bx, top, bx + 4, top, 4);
+            ctx.lineTo(arrowX - 6, top);
+        }
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
@@ -473,12 +625,15 @@ class WidgetThermometer extends CWidgetGaugeBase {
     _drawDots(ctx, width, y, n, focused, dark) {
         const r = 3;
         const gap = 12;
-        const max_dots = Math.min(n, Math.floor((width * 0.9) / gap));
-        const shown = max_dots;
+        const shown = Math.max(1, Math.min(n, Math.floor((width * 0.9) / gap)));
+        // focused — абсолютный индекс [0, n-1]; если точек меньше, чем айтемов, проецируем.
+        const active_dot = (shown >= n)
+            ? focused
+            : Math.round((focused / Math.max(1, n - 1)) * (shown - 1));
         const total = (shown - 1) * gap;
         const x0 = width / 2 - total / 2;
         for (let i = 0; i < shown; i++) {
-            const active = (i === focused % shown);
+            const active = (i === active_dot);
             ctx.beginPath();
             ctx.arc(x0 + i * gap, y, active ? r + 1 : r, 0, Math.PI * 2);
             ctx.fillStyle = active
@@ -500,7 +655,8 @@ class WidgetThermometer extends CWidgetGaugeBase {
 
     _bindDrag() {
         this._onDown = (e) => {
-            if ((this.isEditMode && this.isEditMode()) || this._items().length <= 1) {
+            // Когда всё влезает (this._fits) — прокручивать нечего, фокус выбирается наведением.
+            if ((this.isEditMode && this.isEditMode()) || this._items().length <= 1 || this._fits) {
                 return;
             }
             this._dragging = true;
@@ -518,21 +674,30 @@ class WidgetThermometer extends CWidgetGaugeBase {
             }
             this._scroll = this._drag_scroll0 - (e.clientX - this._drag_x0) / this._slot_w;
         };
+        // Отдельный трекинг X курсора над canvas — для выбора фокуса, когда всё влезает.
+        this._onHover = (e) => {
+            const rect = this._canvas.getBoundingClientRect();
+            this._hover_x = e.clientX - rect.left;
+        };
         this._onUp = () => {
             if (!this._dragging) {
                 return;
             }
             this._dragging = false;
-            this._scroll_target = Math.round(this._scroll);   // снап к ближайшему (зацикленно)
+            // снап к ближайшему целому индексу, в пределах границ прокрутки
+            const lo = (this._s_min !== undefined) ? this._s_min : 0;
+            const hi = (this._s_max !== undefined) ? this._s_max : Math.max(0, this._items().length - 1);
+            this._scroll_target = Math.max(lo, Math.min(hi, Math.round(this._scroll)));
             this._canvas.style.cursor = 'grab';
         };
 
         this._onEnter = () => { this._hovering = true; };   // пауза автоскролла
-        this._onLeave = () => { this._hovering = false; };
+        this._onLeave = () => { this._hovering = false; this._hover_x = null; };
 
         this._canvas.addEventListener('pointerdown', this._onDown);
         this._canvas.addEventListener('pointerenter', this._onEnter);
         this._canvas.addEventListener('pointerleave', this._onLeave);
+        this._canvas.addEventListener('pointermove', this._onHover);
         window.addEventListener('pointermove', this._onMove);
         window.addEventListener('pointerup', this._onUp);
         this._canvas.style.cursor = 'grab';
@@ -546,6 +711,7 @@ class WidgetThermometer extends CWidgetGaugeBase {
         this._canvas.removeEventListener('pointerdown', this._onDown);
         this._canvas.removeEventListener('pointerenter', this._onEnter);
         this._canvas.removeEventListener('pointerleave', this._onLeave);
+        this._canvas.removeEventListener('pointermove', this._onHover);
         window.removeEventListener('pointermove', this._onMove);
         window.removeEventListener('pointerup', this._onUp);
         this._drag_bound = false;

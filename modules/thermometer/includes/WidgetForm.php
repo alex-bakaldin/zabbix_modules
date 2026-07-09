@@ -13,7 +13,6 @@ use Zabbix\Widgets\Fields\{
     CWidgetFieldIntegerBox,
     CWidgetFieldMultiSelectGroup,
     CWidgetFieldMultiSelectOverrideHost,
-    CWidgetFieldNumericBox,
     CWidgetFieldPatternSelectHost,
     CWidgetFieldPatternSelectItem,
     CWidgetFieldRadioButtonList,
@@ -73,11 +72,13 @@ class WidgetForm extends CWidgetForm {
                     self::RANGE_AUTO => _('Auto (shared, history ±5%)')
                 ]))->setDefault(self::RANGE_FIXED)
             )
+            // Min/Max are text boxes (not numeric) so a user macro like {$LOW}
+            // can be used; the controller resolves it and parses the number.
             ->addField(
-                (new CWidgetFieldNumericBox('value_min', _('Min')))->setDefault(0)
+                (new CWidgetFieldTextBox('value_min', _('Min')))->setDefault('0')
             )
             ->addField(
-                (new CWidgetFieldNumericBox('value_max', _('Max')))->setDefault(100)
+                (new CWidgetFieldTextBox('value_max', _('Max')))->setDefault('100')
             )
             ->addField(
                 new CWidgetFieldTextBox('units', _('Units (override)'))
@@ -106,6 +107,17 @@ class WidgetForm extends CWidgetForm {
             )
             ->addField(
                 (new CWidgetFieldColor('mercury_color', _('Mercury color')))->setDefault('D81B18')
+            )
+            // --- thresholds ---
+            // The whole mercury column is repainted with the color of the highest
+            // reached threshold. Threshold values may be user macros ({$WARN}).
+            ->addField(
+                new CWidgetFieldThermoThresholds('thresholds', _('Thresholds'))
+            )
+            ->addField(
+                (new CWidgetFieldCheckBox('threshold_interpolate',
+                    _('Interpolate color between thresholds')
+                ))->setDefault(0)
             );
     }
 }
