@@ -1,6 +1,6 @@
-# Zabbix modules — учебный проект
+# Zabbix modules
 
-Учебный проект по созданию frontend-модулей Zabbix согласно документации
+Проект по созданию frontend-модулей Zabbix согласно документации
 (`documentation/en/devel/modules`). Первый модуль — виджет дашборда **Item value card**.
 
 **Структура репозитория:** `modules/` — «боевые» виджеты (`drawio`, `thermometer`);
