@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 250" font-family="sans-serif">
+  <rect x="0" y="0" width="600" height="250" fill="#0f1420"/>
+  <text x="300" y="28" fill="#8fa3bf" font-size="14" text-anchor="middle">LLD: one template cell, cloned per discovered item</text>
+
+  <!-- Template cell: drawn once, cloned+tiled per matching item at runtime -->
+  <g data-cell-id="tmpl">
+    <rect x="10" y="45" width="130" height="70" rx="8" fill="#2b7a3d" stroke="#5a6b85" stroke-width="1.5"/>
+    <text x="75" y="85" fill="#eef2fb" font-size="12" font-weight="bold" text-anchor="middle">–</text>
+  </g>
+</svg>

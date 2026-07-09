@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 380" font-family="sans-serif">
+  <rect x="0" y="0" width="640" height="380" fill="#0f1420"/>
+  <text x="320" y="30" fill="#8fa3bf" font-size="16" text-anchor="middle">Reactor plant — clean diagram, bindings live in widget config</text>
+
+  <!-- Static labels (not bound) -->
+  <text x="130" y="135" fill="#cdd6e5" font-size="13" text-anchor="middle">Reactor core</text>
+  <text x="420" y="135" fill="#cdd6e5" font-size="13" text-anchor="middle">Turbine</text>
+  <text x="560" y="135" fill="#cdd6e5" font-size="13" text-anchor="middle">Ambient haze</text>
+  <text x="275" y="140" fill="#9fb3d0" font-size="12" text-anchor="middle">Loop A</text>
+  <text x="275" y="275" fill="#9fb3d0" font-size="12" text-anchor="middle">Loop B</text>
+
+  <!-- Coolant loop A: one pipe, thickness AND color driven by the same value -->
+  <g data-cell-id="loopA">
+    <path d="M 190 150 H 360" fill="none" stroke="#3a6ea5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Coolant loop B -->
+  <g data-cell-id="loopB">
+    <path d="M 190 250 H 360" fill="none" stroke="#3a6ea5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Reactor core: fill by threshold + value text -->
+  <g data-cell-id="reactor">
+    <rect x="70" y="150" width="120" height="100" rx="10" stroke="#5a6b85" stroke-width="2" fill="#3fa34d"/>
+    <text x="130" y="205" fill="#0f1420" font-size="18" font-weight="bold" text-anchor="middle">–</text>
+  </g>
+
+  <!-- Turbine: border color by threshold + value text -->
+  <g data-cell-id="turbine">
+    <rect x="360" y="150" width="120" height="100" rx="10" fill="#1b2740" stroke="#5a6b85" stroke-width="3"/>
+    <text x="420" y="205" fill="#cdd6e5" font-size="18" font-weight="bold" text-anchor="middle">–</text>
+  </g>
+
+  <!-- Ambient haze: opacity by value (rect only, so it can fade) -->
+  <g data-cell-id="haze">
+    <rect x="500" y="150" width="120" height="100" rx="10" fill="#8fa3bf" stroke="none"/>
+  </g>
+  <g data-cell-id="haze_val">
+    <text x="560" y="205" fill="#cdd6e5" font-size="18" font-weight="bold" text-anchor="middle">–</text>
+  </g>
+</svg>

@@ -1,0 +1,69 @@
+.drawio-surface {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: auto;
+}
+
+.drawio-surface svg {
+	max-width: 100%;
+	max-height: 100%;
+	height: auto;
+}
+
+.drawio-empty {
+	padding: 10px;
+	color: #888;
+	font-style: italic;
+}
+
+/* --- п.1: smooth transitions --------------------------------------------
+ * The user script runs once per refresh and sets values as a step change.
+ * These transitions make each refresh interpolate smoothly (a pipe thickens,
+ * a colour flows) without any loop — the browser animates the delta itself.
+ */
+.drawio-surface [data-cell-id] rect,
+.drawio-surface [data-cell-id] ellipse,
+.drawio-surface [data-cell-id] circle,
+.drawio-surface [data-cell-id] path,
+.drawio-surface [data-cell-id] polygon,
+.drawio-surface [data-cell-id] line,
+.drawio-surface [data-cell-id] polyline {
+	transition: fill .6s ease, stroke .6s ease, stroke-width .6s ease, opacity .6s ease;
+}
+
+.drawio-surface [data-cell-id] {
+	transition: opacity .6s ease;
+}
+
+/* --- п.2: declarative animations ----------------------------------------
+ * set({ animate: 'pulse' | 'blink' }) and set({ flow: <speed> }) attach a
+ * browser-run animation that keeps living between refreshes. The script only
+ * turns it on/off once; it never loops itself (DoS-safe).
+ */
+@keyframes drawio-pulse {
+	0%, 100% { opacity: 1; }
+	50%      { opacity: .35; }
+}
+
+.drawio-pulse {
+	animation: drawio-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes drawio-blink {
+	0%, 49%   { opacity: 1; }
+	50%, 100% { opacity: .15; }
+}
+
+.drawio-blink {
+	animation: drawio-blink 1s step-end infinite;
+}
+
+/* Flowing dashes along a line — direction and speed of a flow. The dash
+ * pattern (8+4=12) is shifted by exactly one period for a seamless loop.
+ */
+@keyframes drawio-flow {
+	to { stroke-dashoffset: -12; }
+}

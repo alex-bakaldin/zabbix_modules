@@ -1,0 +1,21 @@
+{
+    "manifest_version": 2.0,
+    "id": "drawio",
+    "type": "widget",
+    "name": "Diagram (draw.io/SVG)",
+    "namespace": "Drawio",
+    "version": "1.0",
+    "author": "Oscar",
+    "actions": {
+        "widget.drawio.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetDrawio"
+    },
+    "assets": {
+        "css": ["widget.css"],
+        "js": ["class.widget.js"]
+    }
+}
