@@ -5,7 +5,7 @@
     "name": "Thermometer (canvas)",
     "namespace": "Thermometer",
     "version": "1.0",
-    "author": "Oscar",
+    "author": "Alex Bakaldin",
     "actions": {
         "widget.thermometer.view": {
             "class": "WidgetView"

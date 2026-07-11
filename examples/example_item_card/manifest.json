@@ -5,7 +5,7 @@
     "name": "Item value card",
     "namespace": "ExampleItemCard",
     "version": "1.0",
-    "author": "Oscar",
+    "author": "Alex Bakaldin",
     "actions": {
         "widget.example_item_card.view": {
             "class": "WidgetView"

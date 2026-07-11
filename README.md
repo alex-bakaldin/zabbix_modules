@@ -3,9 +3,9 @@
 Проект по созданию frontend-модулей Zabbix согласно документации
 (`documentation/en/devel/modules`). Первый модуль — виджет дашборда **Item value card**.
 
-**Структура репозитория:** `modules/` — «боевые» виджеты (`drawio`, `thermometer`);
-`examples/` — учебные примеры-заготовки (`example_item_card`, `example_canvas`,
-`example_pattern`, `example_manometer`). В контейнере Zabbix модули должны лежать в
+**Структура репозитория:** `modules/` — «боевые» виджеты (`drawio`, `thermometer`,
+`analog_gauge`); `examples/` — учебные примеры-заготовки (`example_item_card`,
+`example_canvas`, `example_pattern`). В контейнере Zabbix модули должны лежать в
 `/var/www/html/modules/…` независимо от того, где они на хосте (`modules/` или
 `examples/`) — маунт задаёт соответствие `relative_path` (container-relative)
 остаётся `modules/<id>`.
@@ -146,21 +146,38 @@ class WidgetMyThing extends CWidgetCanvasBase {
 Демо-дашборд **Pattern items demo** (id 427):
 <http://localhost:8081/zabbix.php?action=dashboard.view&dashboardid=427>
 
-## Виджеты-гауджи: `example_manometer` и `thermometer`
+## Виджеты-гауджи: `analog_gauge` и `thermometer`
 
 Два отдельных виджета на общей базе. Логика гауджа (значение из истории/демо, диапазон
 fixed/auto, плавная анимация, формат, тема) вынесена в `CWidgetGaugeBase`
 (`assets/js/class.gauge.base.js`, поверх `CWidgetCanvasBase`); конкретный виджет реализует
-только `_drawGauge(ctx, scene)`. Обе базы — общие глобалы (`window.X ||= class …`), файлы
-идентичны в модулях. Порядок `assets.js`: `class.widget.base.js` → `class.gauge.base.js`
-→ `class.widget.js`.
+только `_drawGauge(ctx, scene)` (либо, для мульти-виджетов, переопределяет `draw()`
+целиком). Обе базы — общие глобалы (`window.X ||= class …`), файлы идентичны в модулях.
+Порядок `assets.js`: `class.widget.base.js` → `class.gauge.base.js` → `class.widget.js`.
 
 Всё рисуется **процедурно** (градиенты/тени/трансформы) — картинки не нужны. Значение из
-истории выбранного item; без item/данных — демо-развёртка. Анимация — доводчик по `dt`.
+истории; без данных — демо-развёртка. Анимация — доводчик по `dt`.
 
-**`example_manometer`** — стимпанк-манометр: бронзовый безель с винтами, тики и цифры,
-красная опасная зона, вороненая стрелка с красным кончиком, стеклянный блик.
-Демо (id 430): <http://localhost:8081/zabbix.php?action=dashboard.view&dashboardid=430>
+**`analog_gauge`** — **мульти-виджет «сетка аналоговых манометров»** (переименован из
+`manometer`; подробная документация:
+[modules/analog_gauge/README.md](modules/analog_gauge/README.md), EN/RU/SR/PL/LV). Тот же
+выбор данных, что у термометра (паттерн имени + хосты/группы + теги + макросы по хосту +
+пороги), но раскладка **сеткой, без карусели**: каждый подходящий айтем — свой круглый
+циферблат, число колонок подбирается автоматически (или фиксируется полем **Grid columns**).
+Каждый циферблат плавно анимирует стрелку к своему значению; без данных — демо-развёртка.
+Четыре оформления на выбор (**Style**): **Retro** (винтажная латунь), **Cyberpunk** (неон на
+тёмном), **Industrial** (стальной корпус с болтами) и **Minimal** (плоская дуга-прогресс +
+крупное число, тема-зависимый). **Пороги** — цветные зоны на дуге + окраска цифрового
+значения по достигнутому порогу; **Min/Max и пороги** принимают **макросы**, раскрываемые
+per-item по хосту (кастомное поле `CWidgetFieldGaugeThresholds`). Опционально стрелки
+**слегка дрожат** (`Needle tremor` — только стрелка, не значение), а при заданном
+**мин. размере циферблата** (`Min gauge size`) то, что не влезло в сетку, достаётся
+**прокруткой мышью по обеим осям**. При наведении — подсказка с полным именем/хостом.
+
+![Стили аналогового датчика](modules/analog_gauge/docs/styles.png)
+
+Демо (id 709, хост *Demo sensors* со script-айтемами, по странице на стиль + страница
+«Grid + scroll»): <http://localhost:8081/zabbix.php?action=dashboard.view&dashboardid=709>
 
 **`thermometer`** — **мульти-виджет «карусель»** (подробная документация: [modules/thermometer/README.md](modules/thermometer/README.md)). Айтемы выбираются паттерном
 имени + хосты/группы паттерном + фильтр по тегам (модель SVG graph). Термометры стоят

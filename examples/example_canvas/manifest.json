@@ -5,7 +5,7 @@
     "name": "Canvas playground",
     "namespace": "ExampleCanvas",
     "version": "1.0",
-    "author": "Oscar",
+    "author": "Alex Bakaldin",
     "actions": {
         "widget.example_canvas.view": {
             "class": "WidgetView"

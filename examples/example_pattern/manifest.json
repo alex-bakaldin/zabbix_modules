@@ -5,7 +5,7 @@
     "name": "Pattern items (debug)",
     "namespace": "ExamplePattern",
     "version": "1.0",
-    "author": "Oscar",
+    "author": "Alex Bakaldin",
     "actions": {
         "widget.example_pattern.view": {
             "class": "WidgetView"

@@ -1,0 +1,9 @@
+div.dashboard-widget-analog_gauge {
+    padding: 0;
+}
+
+div.dashboard-widget-analog_gauge .canvas-widget-surface {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
