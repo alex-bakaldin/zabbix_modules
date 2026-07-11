@@ -47,4 +47,6 @@ $form
     ->addField(new CWidgetFieldRadioButtonListView($data['fields']['evaltype']))
     ->addField(new CWidgetFieldTagsView($data['fields']['item_tags']))
     ->addField(new CWidgetFieldMultiSelectOverrideHostView($data['fields']['override_hostid']))
+    ->includeJsFile('widget.edit.js.php')
+    ->initFormJs('widget_form.init();')
     ->show();

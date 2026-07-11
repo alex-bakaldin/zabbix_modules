@@ -50,6 +50,9 @@ motywu (`light-dark()`), więc renderuje się natywnie także w jasnym motywie Z
   na kilka wierszy `widget_field`, więc żadne z nich nie jest ograniczone do 64 KB.
 - **Piaskownica i odporność na DoS:** skrypt działa w izolowanym iframe + Worker — bez
   dostępu do ciasteczek/DOM/sieci z poświadczeniami, a zapętlony skrypt jest przerywany.
+- **Wspomagana edycja:** diagram wczytuje się z pliku z podglądem na żywo, a pole skryptu
+  to edytor CodeMirror z podświetlaniem składni, linterem i autouzupełnianiem identyfikatorów
+  komórek diagramu — wszystko dołączone lokalnie (vendored), działa bez połączenia z siecią.
 
 ---
 
@@ -87,7 +90,8 @@ Narysuj diagram w [draw.io / diagrams.net](https://app.diagrams.net) i
    nieprzejrzyste auto-id (np. `1Y4-VilqHyjT-noTrS5i-97`); komórkę można też dopasować
    po widocznej **etykiecie** (`cells.byLabel('eth0')`), co zwykle jest wygodniejsze.
 
-Wklej powstały SVG do pola widgetu **Diagram SVG**.
+Wczytaj powstały SVG do pola widgetu **Diagram SVG** — wybierz plik (pojawia się podgląd)
+lub wklej źródło.
 
 ---
 
@@ -101,6 +105,24 @@ Wklej powstały SVG do pola widgetu **Diagram SVG**.
 | **Item patterns** | które elementy rozwiązać i wstrzyknąć |
 | **Item tags** | filtr po tagach (And/Or) |
 | **Override host** | dynamiczny/nadpisujący host dla pulpitów szablonowych |
+
+### Formularz edycji
+
+![Widget edit form](docs/form.png)
+
+- **Diagram** — zamiast wklejać, wybierz wyeksportowany plik `.svg`; formularz pokazuje
+  miniaturę podglądu i podsumowanie `… KB, N cells`. Surowy SVG pozostaje dostępny pod
+  *Show / paste SVG source* do ręcznych poprawek.
+- **Edytor skryptu** — edytor CodeMirror z podświetlaniem składni JavaScript, linterem
+  (błędy składni są oznaczane na marginesie), dopasowywaniem i automatycznym zamykaniem
+  nawiasów.
+- **Autouzupełnianie identyfikatorów** — wewnątrz `cells.get('…')` / `cells.byLabel('…')`
+  edytor podpowiada **identyfikatory i etykiety komórek odczytane z wczytanego SVG**;
+  w innych miejscach oferuje interfejs `cells` / `api`. W dowolnym momencie naciśnij
+  `Ctrl-Space`.
+
+CodeMirror jest dołączony lokalnie w module (`assets/*/vendor`) i ładowany tylko przy
+otwartym formularzu, więc działa w pełni bez sieci i niczego nie dokłada do pozostałych stron.
 
 ---
 
@@ -304,14 +326,3 @@ do wykonywania inline (izolacja pozostaje, ale bez gwarancji przeciw DoS).
 
 > Uwaga: to narzędzie dla zaawansowanych. Odpowiednio ogranicz, kto może edytować
 > takie pulpity.
-
----
-
-## Pulpity demo (projekt do nauki)
-
-| Pulpit | Co pokazuje |
-|--------|-------------|
-| Reactor mnemonic | ręcznie narysowany SVG, skryptowanie per komórka |
-| Real IntPage | prawdziwy wyeksportowany `.drawio`, adresowanie po auto-id |
-| LLD clone | jedna komórka-szablon → kafelkowana dla każdego wykrytego elementu |
-| Chunk test | SVG 115 KB, przechowywany/renderowany przez fragmenty |

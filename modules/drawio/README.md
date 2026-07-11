@@ -49,6 +49,9 @@ natively in the light Zabbix theme too.
   several `widget_field` rows, so neither is bounded by the 64 KB column.
 - **Sandboxed & DoS-safe:** the script runs in an isolated iframe + Worker — no
   access to cookies/DOM/credentialed network, and a runaway loop is terminated.
+- **Assisted editing:** the diagram is loaded by file with a live preview, and the
+  script field is a CodeMirror editor with syntax highlighting, a linter and
+  autocompletion of the diagram's cell ids — all vendored, works offline.
 
 ---
 
@@ -86,7 +89,8 @@ Draw your diagram in [draw.io / diagrams.net](https://app.diagrams.net) and
    opaque auto-ids (e.g. `1Y4-VilqHyjT-noTrS5i-97`); you can also match a cell by
    its visible **label** (`cells.byLabel('eth0')`), which is usually friendlier.
 
-Paste the resulting SVG into the widget's **Diagram SVG** field.
+Load the resulting SVG into the widget's **Diagram SVG** field — pick the file
+(a preview appears) or paste the source.
 
 ---
 
@@ -100,6 +104,22 @@ Paste the resulting SVG into the widget's **Diagram SVG** field.
 | **Item patterns** | which items to resolve and inject |
 | **Item tags** | tag filter (And/Or) |
 | **Override host** | dynamic/override host for template dashboards |
+
+### The editing form
+
+![Widget edit form](docs/form.png)
+
+- **Diagram** — pick the exported `.svg` file instead of pasting it; the form shows
+  a thumbnail preview and a `… KB, N cells` summary. The raw SVG stays available
+  under *Show / paste SVG source* for manual edits.
+- **Script editor** — a CodeMirror editor with JavaScript syntax highlighting, a
+  linter (syntax errors are flagged in the gutter), bracket matching and auto-close.
+- **Id autocompletion** — inside `cells.get('…')` / `cells.byLabel('…')` the editor
+  suggests the **cell ids and labels parsed from the loaded SVG**; elsewhere it
+  offers the `cells` / `api` surface. Press `Ctrl-Space` any time.
+
+CodeMirror is vendored inside the module (`assets/*/vendor`) and loaded only while
+the form is open, so it works fully offline and adds nothing to other pages.
 
 ---
 
@@ -303,14 +323,3 @@ inline evaluation (still isolated, but without the DoS guarantee).
 
 > Note: this is a power-user tool. Restrict who may edit these dashboards
 > accordingly.
-
----
-
-## Demo dashboards (learning project)
-
-| Dashboard | What it shows |
-|-----------|---------------|
-| Reactor mnemonic | hand-drawn SVG, per-cell scripting |
-| Real IntPage | a real exported `.drawio`, addressing auto-ids |
-| LLD clone | one template cell → tiled per discovered item |
-| Chunk test | a 115 KB SVG stored/rendered across chunks |

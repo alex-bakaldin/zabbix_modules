@@ -50,6 +50,9 @@ mākoņiem — viss dzīvi informācijas panelī. Eksportētais draw.io SVG ir t
 - **Smilškaste un noturība pret DoS:** skripts darbojas izolētā iframe + Worker — bez
   piekļuves sīkfailiem/DOM/tīklam ar akreditācijas datiem, un ciklā iestrēgušu skriptu
   pārtrauc.
+- **Rediģēšanas atbalsts:** diagramma tiek ielādēta pa failu ar tiešu priekšskatījumu,
+  un skripta lauks ir CodeMirror redaktors ar sintakses izcelšanu, linteri un diagrammas
+  šūnu id automātisko pabeigšanu — viss iekļauts modulī, darbojas bezsaistē.
 
 ---
 
@@ -86,7 +89,8 @@ Uzzīmējiet diagrammu [draw.io / diagrams.net](https://app.diagrams.net) un
    (piemēram, `1Y4-VilqHyjT-noTrS5i-97`); šūnu var atrast arī pēc redzamā **uzraksta**
    (`cells.byLabel('eth0')`), kas parasti ir ērtāk.
 
-Ielīmējiet iegūto SVG logrīka laukā **Diagram SVG**.
+Ielādējiet iegūto SVG logrīka laukā **Diagram SVG** — izvēlieties failu (parādās
+priekšskatījums) vai ielīmējiet avotu.
 
 ---
 
@@ -100,6 +104,22 @@ Ielīmējiet iegūto SVG logrīka laukā **Diagram SVG**.
 | **Item patterns** | kurus vienumus atrisināt un iesūtīt |
 | **Item tags** | filtrs pēc tagiem (And/Or) |
 | **Override host** | dinamiskais/aizstājošais resursdators šablonu paneļiem |
+
+### Rediģēšanas forma
+
+![Widget edit form](docs/form.png)
+
+- **Diagram** — izvēlieties eksportēto `.svg` failu, nevis to ielīmējiet; forma parāda
+  sīktēla priekšskatījumu un `… KB, N cells` kopsavilkumu. Neapstrādātais SVG paliek
+  pieejams sadaļā *Show / paste SVG source* manuālai rediģēšanai.
+- **Script editor** — CodeMirror redaktors ar JavaScript sintakses izcelšanu, linteri
+  (sintakses kļūdas tiek atzīmētas malā), iekavu saskaņošanu un automātisku aizvēršanu.
+- **Id automātiskā pabeigšana** — iekšpus `cells.get('…')` / `cells.byLabel('…')`
+  redaktors iesaka **šūnu id un uzrakstus, kas nolasīti no ielādētā SVG**; citviet tas
+  piedāvā `cells` / `api` virsmu. Nospiediet `Ctrl-Space` jebkurā brīdī.
+
+CodeMirror ir iekļauts modulī (`assets/*/vendor`) un tiek ielādēts tikai tad, kad forma
+ir atvērta, tāpēc tas pilnībā darbojas bezsaistē un neko nepievieno citām lapām.
 
 ---
 
@@ -301,14 +321,3 @@ Ja pārlūks atsaka Worker izveidi izolētā ietvarā, logrīks atgriežas pie i
 
 > Piezīme: šis ir rīks pieredzējušiem lietotājiem. Attiecīgi ierobežojiet, kurš drīkst
 > rediģēt šādus paneļus.
-
----
-
-## Demo paneļi (mācību projekts)
-
-| Panelis | Ko rāda |
-|---------|---------|
-| Reactor mnemonic | ar roku zīmēts SVG, skriptēšana pa šūnām |
-| Real IntPage | īsts eksportēts `.drawio`, adresēšana pēc auto-id |
-| LLD clone | viena veidnes šūna → izkārtota katram atklātajam vienumam |
-| Chunk test | 115 KB SVG, glabāts/attēlots caur fragmentiem |

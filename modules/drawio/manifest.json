@@ -4,8 +4,8 @@
     "type": "widget",
     "name": "Diagram (draw.io/SVG)",
     "namespace": "Drawio",
-    "version": "1.0",
-    "author": "Oscar",
+    "version": "1.1",
+    "author": "Alex Bakaldin",
     "actions": {
         "widget.drawio.view": {
             "class": "WidgetView"

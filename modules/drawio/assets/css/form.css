@@ -1,0 +1,115 @@
+/* ---- Diagram (draw.io/SVG) widget — edit-form enhancements ---- */
+/* File picker + preview for the diagram field, and the CodeMirror script editor. */
+
+/* Diagram field: file picker + status + preview */
+.drawio-diagram-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-width: 640px;
+}
+
+.drawio-picker-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.drawio-file-input { display: none; }
+
+.drawio-status {
+	font-size: 11px;
+	color: #768d99;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.drawio-status.drawio-empty { color: #d24b4b; }
+
+.drawio-preview {
+	border: 1px solid #dfe4e7;
+	border-radius: 2px;
+	padding: 6px;
+	background:
+		linear-gradient(45deg, #f4f6f7 25%, transparent 25%, transparent 75%, #f4f6f7 75%) 0 0/16px 16px,
+		linear-gradient(45deg, #f4f6f7 25%, #fff       25%, #fff       75%, #f4f6f7 75%) 8px 8px/16px 16px,
+		#fff;
+	display: none;
+}
+
+.drawio-preview.drawio-has-image { display: block; }
+
+.drawio-preview img {
+	display: block;
+	max-width: 100%;
+	max-height: 200px;
+	margin: 0 auto;
+}
+
+.drawio-source-toggle > summary {
+	cursor: pointer;
+	font-size: 11px;
+	color: #768d99;
+	user-select: none;
+}
+
+.drawio-source-toggle[open] > summary { margin-bottom: 6px; }
+
+/* Script field: CodeMirror container styled like a Zabbix textarea */
+.drawio-editor {
+	max-width: 640px;
+	border: 1px solid #dfe4e7;
+	border-radius: 2px;
+	overflow: hidden;
+}
+
+.drawio-editor .CodeMirror {
+	height: auto;
+	min-height: 220px;
+	background: transparent;
+	color: inherit;
+	font-family: monospace;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.drawio-editor .CodeMirror-scroll { max-height: 460px; }
+
+.drawio-editor .CodeMirror-gutters {
+	background: transparent;
+	border-right: 1px solid #eef1f2;
+}
+
+.drawio-lint-msg {
+	font-size: 11px;
+	color: #d24b4b;
+	margin-top: 4px;
+	white-space: pre-wrap;
+}
+
+/* Dark-theme adjustments (applied when the dialog background is dark) */
+.drawio-editor.cm-dark { border-color: #383838; }
+.drawio-editor.cm-dark .CodeMirror-gutters { border-right-color: #2b2b2b; }
+.drawio-editor.cm-dark .CodeMirror-cursor { border-left-color: #d8d8d8; }
+.cm-dark .CodeMirror-selected { background: #3a3f47 !important; }
+.cm-dark .cm-comment { color: #7f9f7f; }
+.cm-dark .cm-keyword { color: #cc99cc; }
+.cm-dark .cm-def,
+.cm-dark .cm-variable { color: #dcdccc; }
+.cm-dark .cm-variable-2 { color: #8cd0d3; }
+.cm-dark .cm-property { color: #7cb8bb; }
+.cm-dark .cm-number { color: #f0c674; }
+.cm-dark .cm-string { color: #cc9393; }
+.cm-dark .cm-operator { color: #d8d8d8; }
+.cm-dark .CodeMirror-activeline-background { background: rgba(255, 255, 255, .04); }
+
+.drawio-preview.cm-dark,
+.cm-dark .drawio-preview {
+	border-color: #383838;
+	background:
+		linear-gradient(45deg, #2b2b2b 25%, transparent 25%, transparent 75%, #2b2b2b 75%) 0 0/16px 16px,
+		linear-gradient(45deg, #2b2b2b 25%, #3a3a3a   25%, #3a3a3a   75%, #2b2b2b 75%) 8px 8px/16px 16px,
+		#3a3a3a;
+}

@@ -50,6 +50,9 @@ pa se nativno prikazuje i u svetloj Zabbix temi.
   `widget_field` redova, pa nijedno nije ograničeno na 64 KB.
 - **Izolovano i otporno na DoS:** skripta se izvršava u izolovanom iframe + Worker —
   bez pristupa kolačićima/DOM-u/mreži sa akreditivima, a skripta u petlji se prekida.
+- **Potpomognuto uređivanje:** dijagram se učitava iz fajla uz živi pregled, a polje
+  skripte je CodeMirror editor sa isticanjem sintakse, linterom i automatskim
+  dovršavanjem id-ova ćelija dijagrama — sve je ugrađeno (vendored), radi van mreže.
 
 ---
 
@@ -86,7 +89,8 @@ Nacrtajte dijagram u [draw.io / diagrams.net](https://app.diagrams.net) i
    auto-id-ovi (npr. `1Y4-VilqHyjT-noTrS5i-97`); ćeliju možete naći i po vidljivoj
    **oznaci** (`cells.byLabel('eth0')`), što je obično zgodnije.
 
-Nalepite dobijeni SVG u polje vidžeta **Diagram SVG**.
+Učitajte dobijeni SVG u polje vidžeta **Diagram SVG** — izaberite fajl (pojavljuje se
+pregled) ili nalepite izvor.
 
 ---
 
@@ -100,6 +104,23 @@ Nalepite dobijeni SVG u polje vidžeta **Diagram SVG**.
 | **Item patterns** | koje stavke razrešiti i ubaciti |
 | **Item tags** | filter po tagovima (And/Or) |
 | **Override host** | dinamički/override host za šablonske table |
+
+### Forma za uređivanje
+
+![Widget edit form](docs/form.png)
+
+- **Diagram** — izaberite izvezeni `.svg` fajl umesto da ga lepite; forma prikazuje
+  umanjeni pregled i sažetak `… KB, N cells`. Sirovi SVG ostaje dostupan pod
+  *Show / paste SVG source* za ručne izmene.
+- **Script editor** — CodeMirror editor sa isticanjem JavaScript sintakse, linterom
+  (sintaksne greške se označavaju na margini), uparivanjem i automatskim zatvaranjem
+  zagrada.
+- **Dovršavanje id-ova** — unutar `cells.get('…')` / `cells.byLabel('…')` editor
+  predlaže **id-ove i oznake ćelija parsirane iz učitanog SVG-a**; drugde nudi
+  `cells` / `api` površinu. Pritisnite `Ctrl-Space` u bilo kom trenutku.
+
+CodeMirror je ugrađen unutar modula (`assets/*/vendor`) i učitava se samo dok je forma
+otvorena, pa u potpunosti radi van mreže i ništa ne dodaje ostalim stranicama.
 
 ---
 
@@ -301,14 +322,3 @@ izvršavanje (izolacija ostaje, ali bez garancije protiv DoS-a).
 
 > Napomena: ovo je alat za napredne korisnike. U skladu s tim ograničite ko sme da
 > uređuje ovakve table.
-
----
-
-## Demo table (projekat za učenje)
-
-| Tabla | Šta prikazuje |
-|-------|---------------|
-| Reactor mnemonic | ručno nacrtan SVG, skriptovanje po ćelijama |
-| Real IntPage | stvarni izvezeni `.drawio`, adresiranje po auto-id-ovima |
-| LLD clone | jedna ćelija-šablon → poređana po svakoj otkrivenoj stavki |
-| Chunk test | SVG od 115 KB, čuvan/prikazan kroz delove |
