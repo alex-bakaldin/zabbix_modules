@@ -1,0 +1,16 @@
+[
+  {
+    "host": "Demo sensors",
+    "hostid": "10805",
+    "tags": [{"tag": "env", "value": "demo"}],
+    "macros": {"{$TEMP.WARN}": "50", "{$TEMP.CRIT}": "80"},
+    "items": [
+      {"key": "demo.reactor",   "name": "Reactor temperature", "value": 92.5, "units": "°C", "value_type": 0, "tags": []},
+      {"key": "demo.coolant.a", "name": "Coolant loop A",      "value": 3.4,  "units": "MW",  "value_type": 0, "tags": []},
+      {"key": "demo.coolant.b", "name": "Coolant loop B",      "value": 6.8,  "units": "MW",  "value_type": 0, "tags": []},
+      {"key": "demo.turbine",   "name": "Turbine output",      "value": 71.2, "units": "MW",  "value_type": 0, "tags": []},
+      {"key": "demo.ambient",   "name": "Ambient haze",        "value": 18.0, "units": "%",   "value_type": 0, "tags": []}
+    ],
+    "triggers": []
+  }
+]

@@ -90,6 +90,21 @@ Narysuj diagram w [draw.io / diagrams.net](https://app.diagrams.net) i
    nieprzejrzyste auto-id (np. `1Y4-VilqHyjT-noTrS5i-97`); komórkę można też dopasować
    po widocznej **etykiecie** (`cells.byLabel('eth0')`), co zwykle jest wygodniejsze.
 
+3. **Motyw jasny / ciemny.** draw.io eksportuje kolory zależne od motywu jako funkcję
+   CSS `light-dark(ciemny, jasny)` i ustawia `color-scheme: light dark` na `<svg>` —
+   przez co sam SVG podążałby za motywem **systemu operacyjnego**, a nie Zabbixa. Widget
+   to koryguje: odczytuje aktywny schemat z atrybutu `<html color-scheme>` ustawianego
+   przez Zabbix i wymusza go na SVG, więc automatyczne kolory diagramu (tekst, etykiety,
+   gradienty) pasują do jasnego lub ciemnego motywu interfejsu. W praktyce:
+
+   - Trzymaj **tekst i etykiety na automatycznym kolorze** draw.io (nie nadpisuj koloru
+     czcionki), aby były czytelne w obu motywach.
+   - Kolory ustawione **jawnie** — stały fill/stroke w diagramie lub hex z
+     `set({fill: '#e05050'})` w skrypcie — są dosłowne i identyczne w obu motywach. Zwykle
+     tego właśnie chcesz dla kolorów stanu (czerwony = gorąco niezależnie od motywu).
+   - Oba motywy możesz podejrzeć przed wdrożeniem przełącznikiem w
+     [`tools/preview.mjs`](tools/README.md).
+
 Wczytaj powstały SVG do pola widgetu **Diagram SVG** — wybierz plik (pojawia się podgląd)
 lub wklej źródło.
 
@@ -163,7 +178,7 @@ handle.id           // data-cell-id
 handle.label        // tekst etykiety
 handle.bbox         // { x, y, width, height }
 handle.neighbors    // [id, …]  komórki połączone z tą łącznikiem
-handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, animate, flow }
+handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow }
 handle.clone({ id?, dx?, dy?, patch?, edges? })   // klon z przesunięciem; zwraca nowy handle
 handle.repeat(list, { cols, gap, edges }, fn)     // klon dla każdego elementu, w siatce; fn(cell, item, i)
 handle.remove({ edges? })
@@ -182,7 +197,17 @@ przekierowane punkty pośrednie stają się prostymi.
 api.scale(v, inMin, inMax, outMin, outMax)   // liniowe mapowanie z ograniczeniem
 api.color(v, [[threshold, color], …], base)  // kolor najwyższego osiągniętego progu
 api.grid(i, { cols, gap, w, h })             // → { dx, dy }
+api.units(v, unit, decimals = 2)             // czytelnie, z przedrostkiem SI/binarnym
 ```
+
+`api.units` odwzorowuje formatowanie samego Zabbixa: **bajty** (`B`, `Bps`) skalują
+się przez **1024**, wszystko inne — w tym **bity** (`bps`, `b`) — przez **1000**.
+Końcowe zera są usuwane. Przykłady: `api.units(1536, 'B')` → `"1.5 KB"`,
+`api.units(2500000, 'bps')` → `"2.5 Mbps"`, `api.units(512, 'B')` → `"512 B"`.
+Obsługiwane są też specjalne jednostki Zabbixa, więc `item.units` można przekazać
+wprost: `uptime` i `s` stają się czasem trwania (`api.units(174820, 'uptime')` →
+`"2 days, 00:33:40"`, `api.units(3661, 's')` → `"1h 1m 1s"`), `unixtime` datą, a
+`%`/`ms`/`rpm`/`RPM` nie są skalowane — `api.units(+item.value, item.units)`.
 
 ### Przykłady
 
@@ -252,6 +277,9 @@ grubieje, a kolor przepływa sam z siebie.
   całej komórki; `'none'` (lub pominięcie) zatrzymuje.
 - `flow: <liczba ze znakiem>` — płynące kreski wzdłuż linii komórki; znak to kierunek,
   wartość to prędkość; `0`/`false` zatrzymuje.
+- `textAngle: <stopnie> | 'edge'` — obraca etykietę komórki. `'edge'` układa ją
+  **równolegle do linii łącznika** (kąt z geometrii linii, z odwróceniem, by tekst
+  nigdy nie był do góry nogami) — przydatne dla etykiet na krawędzi, np. `Rx/Tx`.
 
 ```js
 // Komórka-alarm pulsuje, gdy wyzwalacz jest w stanie PROBLEM.

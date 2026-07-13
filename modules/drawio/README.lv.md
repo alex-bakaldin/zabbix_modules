@@ -89,6 +89,21 @@ Uzzīmējiet diagrammu [draw.io / diagrams.net](https://app.diagrams.net) un
    (piemēram, `1Y4-VilqHyjT-noTrS5i-97`); šūnu var atrast arī pēc redzamā **uzraksta**
    (`cells.byLabel('eth0')`), kas parasti ir ērtāk.
 
+3. **Gaišā / tumšā tēma.** draw.io eksportē no tēmas atkarīgās krāsas kā CSS funkciju
+   `light-dark(tumšā, gaišā)` un uzstāda `color-scheme: light dark` uz `<svg>` — tādēļ
+   pats SVG sekotu **operētājsistēmas**, nevis Zabbix tēmai. Logrīks to izlabo: nolasa
+   aktīvo shēmu no atribūta `<html color-scheme>`, ko uzstāda Zabbix, un uzspiež to SVG,
+   tāpēc diagrammas automātiskās krāsas (teksts, uzraksti, gradienti) atbilst gaišajai
+   vai tumšajai saskarnes tēmai. Praksē:
+
+   - Turiet **tekstu un uzrakstus draw.io automātiskajā krāsā** (nepārrakstiet fonta
+     krāsu), lai tie ir salasāmi abās tēmās.
+   - Krāsas, kas norādītas **tieši** — fiksēts fill/stroke diagrammā vai hex no
+     `set({fill: '#e05050'})` skriptā — ir burtiskas un vienādas abās tēmās. Parasti tas
+     ir tieši tas, ko vēlaties statusa krāsām (sarkans = karsts neatkarīgi no tēmas).
+   - Abas tēmas pirms izvietošanas var apskatīt ar slēdzi
+     [`tools/preview.mjs`](tools/README.md).
+
 Ielādējiet iegūto SVG logrīka laukā **Diagram SVG** — izvēlieties failu (parādās
 priekšskatījums) vai ielīmējiet avotu.
 
@@ -160,7 +175,7 @@ handle.id           // data-cell-id
 handle.label        // uzraksta teksts
 handle.bbox         // { x, y, width, height }
 handle.neighbors    // [id, …]  šūnas, kas ar šo savienotas ar savienotāju
-handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, animate, flow }
+handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow }
 handle.clone({ id?, dx?, dy?, patch?, edges? })   // klons ar nobīdi; atgriež jaunu handle
 handle.repeat(list, { cols, gap, edges }, fn)     // klons katram vienumam, režģī; fn(cell, item, i)
 handle.remove({ edges? })
@@ -179,7 +194,17 @@ modelis); maršrutētie ceļa punkti kļūst taisni.
 api.scale(v, inMin, inMax, outMin, outMax)   // lineāra kartēšana ar ierobežojumu
 api.color(v, [[threshold, color], …], base)  // augstākā sasniegtā sliekšņa krāsa
 api.grid(i, { cols, gap, w, h })             // → { dx, dy }
+api.units(v, unit, decimals = 2)             // cilvēklasāmi, ar SI/bināro prefiksu
 ```
+
+`api.units` atkārto paša Zabbix formatējumu: **baiti** (`B`, `Bps`) mērogojas pēc
+**1024**, viss pārējais — tostarp **biti** (`bps`, `b`) — pēc **1000**. Nulles beigās
+tiek noņemtas. Piemēri: `api.units(1536, 'B')` → `"1.5 KB"`,
+`api.units(2500000, 'bps')` → `"2.5 Mbps"`, `api.units(512, 'B')` → `"512 B"`.
+Tiek atbalstītas arī īpašās Zabbix vienības, tāpēc `item.units` var nodot tieši:
+`uptime` un `s` kļūst par ilgumu (`api.units(174820, 'uptime')` → `"2 days, 00:33:40"`,
+`api.units(3661, 's')` → `"1h 1m 1s"`), `unixtime` — par datumu, bet `%`/`ms`/`rpm`/`RPM`
+netiek mērogotas — `api.units(+item.value, item.units)`.
 
 ### Piemēri
 
@@ -249,6 +274,9 @@ krāsa plūst pati no sevis.
   šūnu; `'none'` (vai izlaišana) aptur.
 - `flow: <skaitlis ar zīmi>` — plūstošas svītras gar šūnas līnijām; zīme ir virziens,
   lielums ir ātrums; `0`/`false` aptur.
+- `textAngle: <grādi> | 'edge'` — pagriež šūnas uzrakstu. `'edge'` novieto to
+  **paralēli savienotāja līnijai** (leņķis no līnijas ģeometrijas, ar apgriešanu, lai
+  teksts nekad nav ar kājām gaisā) — ērti uzrakstiem uz saites, piem. `Rx/Tx`.
 
 ```js
 // Trauksmes šūna pulsē, kamēr trigeris ir stāvoklī PROBLEM.

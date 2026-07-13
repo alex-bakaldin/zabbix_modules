@@ -1,0 +1,5 @@
+# Local scratch for the drawio preview helper (your own SVGs / scripts / data).
+samples/
+
+# Editor / OS noise
+.$*.bkp

@@ -18,12 +18,13 @@
  *                      clone({id,dx,dy,patch,edges}), repeat(list,{cols,gap,edges},fn),
  *                      remove({edges}) }
  *           patch  → { fill, stroke, strokeWidth, opacity, text,
- *                      animate:'pulse'|'blink'|'none', flow:<signed speed> }
+ *                      textAngle:<deg>|'edge', animate:'pulse'|'blink'|'none',
+ *                      flow:<signed speed> }
  *           edges  → true (all incident connectors) | [neighborId,…] (only those);
  *                    clone/remove also act on the lines linking the cell to its
  *                    neighbors — connectivity is recovered from SVG geometry.
  *   api   — { scale(v,inMin,inMax,outMin,outMax), color(v,[[t,c],...],base),
- *            grid(i,{cols,gap,w,h}) }
+ *            grid(i,{cols,gap,w,h}), units(v,unit,decimals) }
  */
 class WidgetDrawio extends CWidget {
 
@@ -87,6 +88,8 @@ class WidgetDrawio extends CWidget {
 			return;
 		}
 
+		this._syncColorScheme();
+
 		// Drop clones from the previous run before re-evaluating.
 		this._svg.querySelectorAll('[data-drawio-clone]').forEach((el) => el.remove());
 
@@ -102,6 +105,26 @@ class WidgetDrawio extends CWidget {
 				this._applyOps(ops, conn);
 			}
 		});
+	}
+
+	// draw.io exports pin `color-scheme: light dark` inline on the <svg>, so their
+	// light-dark(dark, light) colours (text, gradients) resolve against the OS
+	// preference rather than the Zabbix theme. Zabbix records the active UI scheme
+	// on the <html color-scheme> attribute (and the theme name on <html theme>);
+	// mirror it onto the SVG so the diagram matches the rest of the interface.
+	_syncColorScheme() {
+		const html = document.documentElement;
+		let scheme = html.getAttribute('color-scheme');
+
+		if (scheme !== 'light' && scheme !== 'dark') {
+			const theme = html.getAttribute('theme') || '';
+
+			scheme = /dark/.test(theme) ? 'dark' : (theme !== '' ? 'light' : '');
+		}
+
+		if (scheme !== '') {
+			this._svg.style.colorScheme = scheme;
+		}
 	}
 
 	_buildCellModel(conn) {
@@ -465,6 +488,10 @@ class WidgetDrawio extends CWidget {
 			this._setText(cell, String(patch.text));
 		}
 
+		if (patch.textAngle != null) {
+			this._setTextAngle(cell, patch.textAngle);
+		}
+
 		if (patch.animate != null) {
 			this._setAnim(cell, patch.animate);
 		}
@@ -516,7 +543,9 @@ class WidgetDrawio extends CWidget {
 
 	// Replace a cell's label, honoring newlines. draw.io html labels keep the text
 	// in one inner <div> with <br> between lines; plain SVG labels use <text>, where
-	// extra lines become <tspan>s stacked by line height.
+	// extra lines become <tspan>s stacked by line height. draw.io often wraps both in
+	// a <switch> (foreignObject + a <text> fallback) — update whichever are present so
+	// the two never disagree, even though the browser only renders the foreignObject.
 	_setText(cell, text) {
 		const lines = String(text).split('\n');
 		const fo = cell.querySelector('foreignObject');
@@ -526,8 +555,6 @@ class WidgetDrawio extends CWidget {
 			const target = divs.length ? divs[divs.length - 1] : fo;
 
 			target.innerHTML = lines.map((l) => this._escapeHtml(l)).join('<br>');
-
-			return;
 		}
 
 		const text_el = cell.querySelector('text');
@@ -567,6 +594,118 @@ class WidgetDrawio extends CWidget {
 
 	_escapeHtml(s) {
 		return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+
+	// Rotate a cell's label. `angle` is a number of degrees, or 'edge'/'auto' to lay
+	// the label parallel to the cell's connector line (flipped when needed so the
+	// text never ends up upside-down). The label lives in its own <g> inside the
+	// cell, sibling to the line's <g>; we rotate that group and cache its original
+	// transform so re-applying every refresh stays idempotent.
+	_setTextAngle(cell, angle) {
+		const label = cell.querySelector('foreignObject') || cell.querySelector('text');
+
+		if (label === null) {
+			return;
+		}
+
+		let wrap = label;
+
+		while (wrap.parentNode !== null && wrap.parentNode !== cell) {
+			wrap = wrap.parentNode;
+		}
+
+		if (wrap === cell) {
+			return;
+		}
+
+		let deg;
+		let cx;
+		let cy;
+
+		if (angle === 'edge' || angle === 'auto') {
+			const geom = cell.querySelector('path, line, polyline');
+			const ends = geom !== null ? this._geomEndsLocal(geom) : null;
+
+			if (ends === null) {
+				return;
+			}
+
+			deg = Math.atan2(ends[1].y - ends[0].y, ends[1].x - ends[0].x) * 180 / Math.PI;
+
+			if (deg > 90) {
+				deg -= 180;
+			}
+			else if (deg < -90) {
+				deg += 180;
+			}
+
+			cx = (ends[0].x + ends[1].x) / 2;
+			cy = (ends[0].y + ends[1].y) / 2;
+		}
+		else {
+			deg = Number(angle) || 0;
+
+			try {
+				const b = wrap.getBBox();
+
+				cx = b.x + b.width / 2;
+				cy = b.y + b.height / 2;
+			}
+			catch (e) {
+				cx = 0;
+				cy = 0;
+			}
+		}
+
+		let base = wrap.getAttribute('data-drawio-base-transform');
+
+		if (base === null) {
+			base = wrap.getAttribute('transform') || '';
+			wrap.setAttribute('data-drawio-base-transform', base);
+		}
+
+		wrap.setAttribute('transform', (`rotate(${deg} ${cx} ${cy}) ` + base).trim());
+	}
+
+	// First/last point of a geometry element, in its own (local) coordinates.
+	_geomEndsLocal(geom) {
+		const tag = geom.tagName.toLowerCase();
+
+		try {
+			if (tag === 'path') {
+				const total = geom.getTotalLength();
+
+				if (!total) {
+					return null;
+				}
+
+				const a = geom.getPointAtLength(0);
+				const b = geom.getPointAtLength(total);
+
+				return [{x: a.x, y: a.y}, {x: b.x, y: b.y}];
+			}
+
+			if (tag === 'line') {
+				return [
+					{x: +geom.getAttribute('x1'), y: +geom.getAttribute('y1')},
+					{x: +geom.getAttribute('x2'), y: +geom.getAttribute('y2')}
+				];
+			}
+
+			const pts = geom.points;
+
+			if (!pts || pts.numberOfItems < 2) {
+				return null;
+			}
+
+			const f = pts.getItem(0);
+			const l = pts.getItem(pts.numberOfItems - 1);
+
+			return [{x: f.x, y: f.y}, {x: l.x, y: l.y}];
+		}
+		catch (e) {
+			return null;
+		}
 	}
 
 	_cssColor(c) {
@@ -615,8 +754,33 @@ class WidgetDrawio extends CWidget {
 			+ '.forEach(function(t){if(v>=t[0])col=t[1];});return col;}'
 			+ 'function grid(i,o){o=o||{};var cols=o.cols||4,gap=o.gap||12,w=o.w||130,h=o.h||70;'
 			+ 'return{dx:(i%cols)*(w+gap),dy:Math.floor(i/cols)*(h+gap)};}'
+			// Humanize a number the way Zabbix convertUnits does. Special units are
+			// dispatched first: "unixtime" → date-time, "uptime"/"s" → duration,
+			// %/ms/rpm/RPM (and |value|<1) → no scaling. Otherwise an SI/binary prefix:
+			// bytes (B, Bps) scale by 1024, everything else (bits bps, …) by 1000.
+			// e.g. units(1536,"B")="1.5 KB", units(174820,"uptime")="2 days, 00:33:40".
+			+ 'function units(v,u,dec){v=Number(v);if(!isFinite(v))return "";'
+			+ 'u=(u==null)?"":String(u);dec=(dec==null)?2:dec;'
+			+ 'function z(n){return(n<10?"0":"")+n;}'
+			+ 'if(u==="unixtime"){var D=new Date(v*1000);return D.getFullYear()+"-"+z(D.getMonth()+1)+"-"+z(D.getDate())'
+			+ '+" "+z(D.getHours())+":"+z(D.getMinutes())+":"+z(D.getSeconds());}'
+			+ 'if(u==="uptime"){var t=Math.round(Math.abs(v)),sg=v<0?"-":"",dd=Math.floor(t/86400);t-=dd*86400;'
+			+ 'var hh=Math.floor(t/3600);t-=hh*3600;var mm=Math.floor(t/60);t-=mm*60;'
+			+ 'return sg+(dd?dd+(dd===1?" day, ":" days, "):"")+z(hh)+":"+z(mm)+":"+z(t);}'
+			+ 'if(u==="s"){var g=v<0?"-":"",q=Math.abs(v);'
+			+ 'if(q<1)return g+parseFloat((q*1000).toFixed(dec))+"ms";'
+			+ 'var d2=Math.floor(q/86400);q-=d2*86400;var h2=Math.floor(q/3600);q-=h2*3600;'
+			+ 'var m2=Math.floor(q/60);var s2=Math.floor(q-m2*60);var P=[];'
+			+ 'if(d2)P.push(d2+"d");if(h2)P.push(h2+"h");if(m2)P.push(m2+"m");if(s2)P.push(s2+"s");'
+			+ 'return g+(P.slice(0,3).join(" ")||"0s");}'
+			+ 'if(u==="%"||u==="ms"||u==="rpm"||u==="RPM"||Math.abs(v)<1)'
+			+ 'return String(parseFloat(v.toFixed(dec)))+(u?" "+u:"");'
+			+ 'var base=(u==="B"||u==="Bps")?1024:1000,pre="KMGTPEZY",p=0;'
+			+ 'while(Math.abs(v)>=base&&p<8){v/=base;p++;}'
+			+ 'var sf=(p===0?"":pre.charAt(p-1))+u;'
+			+ 'return String(parseFloat(v.toFixed(dec)))+(sf?" "+sf:"");}'
 			+ 'function clean(p){var o={};if(p&&typeof p==="object")'
-			+ '["fill","stroke","strokeWidth","opacity","text","animate","flow"].forEach(function(k){var v=p[k];'
+			+ '["fill","stroke","strokeWidth","opacity","text","textAngle","animate","flow"].forEach(function(k){var v=p[k];'
 			+ 'if(typeof v==="number"||typeof v==="string"||typeof v==="boolean")o[k]=v;});return o;}'
 			+ 'function edg(e){return e===true?true:(Array.isArray(e)?e.filter(function(x){return typeof x==="string";}):false);}'
 			+ 'function build(model){var ops=[],seq=0,byId={};model.forEach(function(c){byId[c.id]=c;});'
@@ -636,11 +800,11 @@ class WidgetDrawio extends CWidget {
 			+ 'byLabel:function(l){var c=model.find(function(x){return x.label===l;});return c?handle(c.id,c):null;},'
 			+ 'find:function(fn){var c=model.find(fn);return c?handle(c.id,c):null;}};'
 			+ 'return{cells:cells,ops:ops};}'
-			+ 'function runJob(d){var b=build(d.cells||[]);var api={scale:scale,color:color,grid:grid};var error=null;'
+			+ 'function runJob(d){var b=build(d.cells||[]);var api={scale:scale,color:color,grid:grid,units:units};var error=null;'
 			+ 'try{(new Function("hosts","cells","api",d.script))(d.hosts||[],b.cells,api);}'
 			+ 'catch(err){error=String((err&&err.stack)||err);}return{ops:b.ops,error:error};}'
 			// Serialize the evaluator into a Worker (own thread → terminable).
-			+ 'var WSRC=[scale,color,grid,clean,edg,build,runJob].map(function(f){return f.toString();}).join("\\n")'
+			+ 'var WSRC=[scale,color,grid,units,clean,edg,build,runJob].map(function(f){return f.toString();}).join("\\n")'
 			+ '+"\\nself.onmessage=function(e){var r=runJob(e.data);self.postMessage({id:e.data.id,ops:r.ops,error:r.error});};";'
 			+ 'var worker=null,jobs={};'
 			+ 'function mk(){try{worker=new Worker(URL.createObjectURL(new Blob([WSRC],{type:"application/javascript"})));'

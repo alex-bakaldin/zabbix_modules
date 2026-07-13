@@ -89,6 +89,21 @@ Nacrtajte dijagram u [draw.io / diagrams.net](https://app.diagrams.net) i
    auto-id-ovi (npr. `1Y4-VilqHyjT-noTrS5i-97`); ćeliju možete naći i po vidljivoj
    **oznaci** (`cells.byLabel('eth0')`), što je obično zgodnije.
 
+3. **Svetla / tamna tema.** draw.io izvozi boje zavisne od teme kao CSS funkciju
+   `light-dark(tamna, svetla)` i postavlja `color-scheme: light dark` na `<svg>` —
+   zbog čega bi sam SVG pratio temu **operativnog sistema**, a ne Zabbix-a. Vidžet to
+   ispravlja: čita aktivnu šemu iz atributa `<html color-scheme>` koji Zabbix postavlja
+   i nameće je SVG-u, pa se automatske boje dijagrama (tekst, oznake, gradijenti)
+   poklapaju sa svetlom ili tamnom Zabbix temom. U praksi:
+
+   - Držite **tekst i oznake na automatskoj boji** draw.io-a (ne menjajte boju fonta)
+     da ostanu čitljivi u obe teme.
+   - Boje zadate **eksplicitno** — fiksni fill/stroke u dijagramu ili hex iz
+     `set({fill: '#e05050'})` u skripti — doslovne su i iste u obe teme. To je obično
+     ono što želite za statusne boje (crvena = vruće bez obzira na temu).
+   - Obe teme možete pregledati pre postavljanja pomoću prekidača u
+     [`tools/preview.mjs`](tools/README.md).
+
 Učitajte dobijeni SVG u polje vidžeta **Diagram SVG** — izaberite fajl (pojavljuje se
 pregled) ili nalepite izvor.
 
@@ -160,7 +175,7 @@ handle.id           // data-cell-id
 handle.label        // tekst oznake
 handle.bbox         // { x, y, width, height }
 handle.neighbors    // [id, …]  ćelije povezane sa ovom konektorom
-handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, animate, flow }
+handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow }
 handle.clone({ id?, dx?, dy?, patch?, edges? })   // klon sa pomerajem; vraća novi handle
 handle.repeat(list, { cols, gap, edges }, fn)     // klon po svakoj stavci, u mreži; fn(cell, item, i)
 handle.remove({ edges? })
@@ -179,7 +194,17 @@ usmerene prelomne tačke postaju prave.
 api.scale(v, inMin, inMax, outMin, outMax)   // linearno mapiranje sa ograničenjem
 api.color(v, [[threshold, color], …], base)  // boja najvišeg dostignutog praga
 api.grid(i, { cols, gap, w, h })             // → { dx, dy }
+api.units(v, unit, decimals = 2)             // humanizovano, sa SI/binarnim prefiksom
 ```
+
+`api.units` prati formatiranje samog Zabbix-a: **bajtovi** (`B`, `Bps`) skaliraju se
+po **1024**, sve ostalo — uključujući **bitove** (`bps`, `b`) — po **1000**. Prateće
+nule se uklanjaju. Primeri: `api.units(1536, 'B')` → `"1.5 KB"`,
+`api.units(2500000, 'bps')` → `"2.5 Mbps"`, `api.units(512, 'B')` → `"512 B"`.
+Podržane su i specijalne Zabbix jedinice, pa `item.units` možete proslediti direktno:
+`uptime` i `s` postaju trajanje (`api.units(174820, 'uptime')` → `"2 days, 00:33:40"`,
+`api.units(3661, 's')` → `"1h 1m 1s"`), `unixtime` datum, a `%`/`ms`/`rpm`/`RPM` se ne
+skaliraju — `api.units(+item.value, item.units)`.
 
 ### Primeri
 
@@ -249,6 +274,9 @@ svaka promena vrednosti već prelazi glatko (fill/stroke/stroke-width/opacity, ~
   koracima) cele ćelije; `'none'` (ili izostavljanje) ga zaustavlja.
 - `flow: <broj sa znakom>` — tekuće crtice duž linija ćelije; znak je smer, veličina
   je brzina; `0`/`false` ih zaustavlja.
+- `textAngle: <stepeni> | 'edge'` — rotira oznaku ćelije. `'edge'` je postavlja
+  **paralelno sa linijom konektora** (ugao iz geometrije linije, sa okretanjem da
+  tekst nikad ne bude naopako) — zgodno za oznake na vezi, npr. `Rx/Tx`.
 
 ```js
 // Ćelija-alarm pulsira dok je okidač u stanju PROBLEM.
