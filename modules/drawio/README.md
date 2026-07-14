@@ -183,7 +183,7 @@ Find the first cell whose visible label equals `text` (exact match, whitespace c
 #### `cells.find(fn)` → `handle | null`
 Find the first cell for which `fn` returns truthy.
 
-- **`fn`** `(cell) => boolean` — predicate; `cell` is a plain descriptor `{ id, label, bbox, neighbors }` (not a handle).
+- **`fn`** `(cell) => boolean` — predicate; `cell` is a plain descriptor `{ id, label, bbox, neighbors, source, target }` (not a handle).
 
 #### `cells.all` → `handle[]`
 A handle for every addressable cell in the diagram.
@@ -198,6 +198,8 @@ A handle exposes the cell's identity/geometry (read-only) and the methods that c
 - **`handle.label`** `string` — visible label text (from the cell's `foreignObject`/`text`, whitespace collapsed; `''` if none).
 - **`handle.bbox`** `{ x, y, width, height }` — bounding box in SVG user units.
 - **`handle.neighbors`** `string[]` — ids of the cells this one is linked to by a connector (recovered from geometry).
+- **`handle.source`** `string | null` — for a **connector**, the id of the node at the line's **start**, exactly as drawn (draw.io *source*; `null` when that end isn't attached to a node).
+- **`handle.target`** `string | null` — for a **connector**, the id of the node at the line's **end** (draw.io *target*; `null` when unattached). Non-connector cells: both `null`. Together they give the line's **direction from the drawing itself** — reverse the arrow in draw.io and `flow` follows, no need to hard-code endpoint order.
 
 #### `handle.set(patch)` → `handle`
 Apply visual changes. Only the keys you pass are touched; the rest is left as-is.
@@ -216,7 +218,7 @@ until you change it — clear it explicitly when a condition ends (`animate: 'no
   | `text` | string | Replace the label; `\n` splits lines. |
   | `textAngle` | number \| `'edge'` | Rotate the label N degrees, or `'edge'` = parallel to the connector line (auto-flipped upright). |
   | `animate` | `'pulse'` \| `'blink'` \| `'none'` | Browser-run animation of the cell. |
-  | `flow` | number | Flowing dashes along the cell's lines: sign = direction, magnitude = speed, `0`/`false` = stop. |
+  | `flow` | number | Flowing dashes along the cell's lines: sign = direction (**positive runs `source`→`target`**, the drawn direction), magnitude = speed, `0`/`false` = stop. |
 
   A **color** is a CSS colour string, or 6 hex digits with or without `#` (`'#e05050'` = `'e05050'`).
 
@@ -357,8 +359,10 @@ pipe thickens and a colour flows on its own.
 
 - `animate: 'pulse' | 'blink' | 'none'` — pulse (smooth) or blink (step) the
   whole cell; `'none'` (or omit) stops it.
-- `flow: <signed number>` — flowing dashes along the cell's lines. Sign is the
-  direction, magnitude is the speed; `0`/`false` stops it.
+- `flow: <signed number>` — flowing dashes along the cell's lines. A **positive**
+  value runs from the line's `source` to its `target` — the direction it was drawn
+  (see `handle.source` / `handle.target`) — negative reverses it; magnitude is the
+  speed; `0`/`false` stops it.
 - `textAngle: <degrees> | 'edge'` — rotate the cell's label. `'edge'` lays it
   **parallel to the connector line** (angle taken from the line geometry, flipped
   so it never reads upside-down) — handy for edge labels like `Rx/Tx` on a link.

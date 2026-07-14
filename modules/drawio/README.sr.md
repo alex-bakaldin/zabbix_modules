@@ -166,7 +166,7 @@ const crit = +hosts[0].macros['{$TEMP.CRIT}'] || 80;
 ```js
 cells.get(id)        // handle | null
 cells.byLabel(text)  // handle | null  (pretraga po vidljivoj oznaci)
-cells.find(fn)       // handle | null  (fn dobija {id,label,bbox,neighbors})
+cells.find(fn)       // handle | null  (fn dobija {id,label,bbox,neighbors,source,target})
 cells.all            // [handle, …]
 ```
 **handle**:
@@ -175,6 +175,8 @@ handle.id           // data-cell-id
 handle.label        // tekst oznake
 handle.bbox         // { x, y, width, height }
 handle.neighbors    // [id, …]  ćelije povezane sa ovom konektorom
+handle.source       // za konektor: id čvora na POČETKU linije (draw.io source; null ako kraj nije spojen)
+handle.target       // za konektor: id čvora na KRAJU linije (draw.io target; null ako nije spojen)
 handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow }
 handle.clone({ id?, dx?, dy?, patch?, edges? })   // klon sa pomerajem; vraća novi handle
 handle.repeat(list, { cols, gap, edges }, fn)     // klon po svakoj stavci, u mreži; fn(cell, item, i)
@@ -272,7 +274,8 @@ svaka promena vrednosti već prelazi glatko (fill/stroke/stroke-width/opacity, ~
 
 - `animate: 'pulse' | 'blink' | 'none'` — pulsiranje (glatko) ili treptanje (u
   koracima) cele ćelije; `'none'` (ili izostavljanje) ga zaustavlja.
-- `flow: <broj sa znakom>` — tekuće crtice duž linija ćelije; znak je smer, veličina
+- `flow: <broj sa znakom>` — tekuće crtice duž linija ćelije; znak je smer
+  (**pozitivno teče `source`→`target`**, onako kako je linija nacrtana), veličina
   je brzina; `0`/`false` ih zaustavlja.
 - `textAngle: <stepeni> | 'edge'` — rotira oznaku ćelije. `'edge'` je postavlja
   **paralelno sa linijom konektora** (ugao iz geometrije linije, sa okretanjem da

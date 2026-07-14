@@ -14,9 +14,12 @@
  *            items:[{key,name,value,units,value_type,tags:[{tag,value}]}],
  *            triggers:[{triggerid,description,priority,status,value,tags:[{tag,value}]}]}]
  *   cells — { get(id), byLabel(text), find(fn), all }
- *           handle → { id, label, bbox, neighbors:[id], set(patch),
+ *           handle → { id, label, bbox, neighbors:[id], source, target, set(patch),
  *                      clone({id,dx,dy,patch,edges}), repeat(list,{cols,gap,edges},fn),
  *                      remove({edges}) }
+ *                    source/target — for a connector, the node ids at the line's
+ *                    START and END, as drawn (geometric direction); null when that
+ *                    end isn't attached to a node. Non-connector cells: both null.
  *           patch  → { fill, stroke, strokeWidth, opacity, text,
  *                      textAngle:<deg>|'edge', animate:'pulse'|'blink'|'none',
  *                      flow:<signed speed> }
@@ -130,6 +133,16 @@ class WidgetDrawio extends CWidget {
 	_buildCellModel(conn) {
 		const model = [];
 
+		// Directed endpoints per connector: na is the node at the line's start
+		// (path point 0), nb the node at its end. Exposed as source/target so a
+		// script can read the flow direction FROM THE DRAWING, not from any
+		// external ordering.
+		const dir = {};
+
+		for (const c of conn.connectors) {
+			dir[c.id] = {source: c.na, target: c.nb};
+		}
+
 		for (const g of this._svg.querySelectorAll('[data-cell-id]')) {
 			const id = g.getAttribute('data-cell-id');
 
@@ -149,8 +162,10 @@ class WidgetDrawio extends CWidget {
 			}
 
 			const neighbors = conn.neighbors[id] ? [...conn.neighbors[id]] : [];
+			const d = dir[id];
 
-			model.push({id, label: this._cellLabel(g), bbox, neighbors});
+			model.push({id, label: this._cellLabel(g), bbox, neighbors,
+				source: d ? d.source : null, target: d ? d.target : null});
 		}
 
 		return model;
@@ -182,7 +197,7 @@ class WidgetDrawio extends CWidget {
 				continue;
 			}
 
-			const bbox = this._rootBBox(g);
+			const bbox = this._cellShapeBBox(g);
 
 			if (bbox !== null) {
 				nodes.push({id, el: g, bbox, area: g.querySelector('rect, ellipse, circle, polygon') !== null});
@@ -303,6 +318,17 @@ class WidgetDrawio extends CWidget {
 		p.y = y;
 
 		return m === null ? {x, y} : p.matrixTransform(m);
+	}
+
+	// Root-space box of a cell's SHAPE, not the whole <g>. draw.io wraps each cell's
+	// label in a <foreignObject> sized to the ENTIRE canvas, so g.getBBox() (hence
+	// _rootBBox(g)) would span the whole diagram — making every node's box overlap
+	// every point and _nodeAt resolve every line endpoint to the same (first) cell.
+	// Measuring the shape element (rect/ellipse/…/path) gives the cell's true box.
+	_cellShapeBBox(g) {
+		const shape = g.querySelector('rect, ellipse, circle, polygon, image, path, line, polyline');
+
+		return this._rootBBox(shape || g);
 	}
 
 	_rootBBox(el) {
@@ -785,7 +811,8 @@ class WidgetDrawio extends CWidget {
 			+ 'function edg(e){return e===true?true:(Array.isArray(e)?e.filter(function(x){return typeof x==="string";}):false);}'
 			+ 'function build(model){var ops=[],seq=0,byId={};model.forEach(function(c){byId[c.id]=c;});'
 			+ 'function handle(id,info){var h={id:id,label:info?info.label:"",'
-			+ 'bbox:info?info.bbox:{x:0,y:0,width:130,height:70},neighbors:(info&&info.neighbors)||[]};'
+			+ 'bbox:info?info.bbox:{x:0,y:0,width:130,height:70},neighbors:(info&&info.neighbors)||[],'
+			+ 'source:(info&&info.source)||null,target:(info&&info.target)||null};'
 			+ 'h.set=function(p){ops.push({op:"set",id:id,patch:clean(p)});return h;};'
 			+ 'h.remove=function(o){ops.push({op:"remove",id:id,edges:edg(o&&o.edges)});};'
 			+ 'h.clone=function(o){o=o||{};var nid=o.id||("__c"+(++seq));'

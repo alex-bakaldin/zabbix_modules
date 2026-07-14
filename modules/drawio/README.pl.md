@@ -169,7 +169,7 @@ const crit = +hosts[0].macros['{$TEMP.CRIT}'] || 80;
 ```js
 cells.get(id)        // handle | null
 cells.byLabel(text)  // handle | null  (dopasowanie po widocznej etykiecie)
-cells.find(fn)       // handle | null  (fn otrzymuje {id,label,bbox,neighbors})
+cells.find(fn)       // handle | null  (fn otrzymuje {id,label,bbox,neighbors,source,target})
 cells.all            // [handle, …]
 ```
 **handle**:
@@ -178,6 +178,8 @@ handle.id           // data-cell-id
 handle.label        // tekst etykiety
 handle.bbox         // { x, y, width, height }
 handle.neighbors    // [id, …]  komórki połączone z tą łącznikiem
+handle.source       // dla łącznika: id węzła na POCZĄTKU linii (draw.io source; null, gdy koniec niepodłączony)
+handle.target       // dla łącznika: id węzła na KOŃCU linii (draw.io target; null, gdy niepodłączony)
 handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow }
 handle.clone({ id?, dx?, dy?, patch?, edges? })   // klon z przesunięciem; zwraca nowy handle
 handle.repeat(list, { cols, gap, edges }, fn)     // klon dla każdego elementu, w siatce; fn(cell, item, i)
@@ -275,8 +277,9 @@ grubieje, a kolor przepływa sam z siebie.
 
 - `animate: 'pulse' | 'blink' | 'none'` — pulsowanie (płynne) lub miganie (skokowe)
   całej komórki; `'none'` (lub pominięcie) zatrzymuje.
-- `flow: <liczba ze znakiem>` — płynące kreski wzdłuż linii komórki; znak to kierunek,
-  wartość to prędkość; `0`/`false` zatrzymuje.
+- `flow: <liczba ze znakiem>` — płynące kreski wzdłuż linii komórki; znak to kierunek
+  (**dodatni biegnie `source`→`target`**, tak jak linia jest narysowana), wartość to
+  prędkość; `0`/`false` zatrzymuje.
 - `textAngle: <stopnie> | 'edge'` — obraca etykietę komórki. `'edge'` układa ją
   **równolegle do linii łącznika** (kąt z geometrii linii, z odwróceniem, by tekst
   nigdy nie był do góry nogami) — przydatne dla etykiet na krawędzi, np. `Rx/Tx`.

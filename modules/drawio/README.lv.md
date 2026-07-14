@@ -166,7 +166,7 @@ const crit = +hosts[0].macros['{$TEMP.CRIT}'] || 80;
 ```js
 cells.get(id)        // handle | null
 cells.byLabel(text)  // handle | null  (meklēšana pēc redzamā uzraksta)
-cells.find(fn)       // handle | null  (fn saņem {id,label,bbox,neighbors})
+cells.find(fn)       // handle | null  (fn saņem {id,label,bbox,neighbors,source,target})
 cells.all            // [handle, …]
 ```
 **handle**:
@@ -175,6 +175,8 @@ handle.id           // data-cell-id
 handle.label        // uzraksta teksts
 handle.bbox         // { x, y, width, height }
 handle.neighbors    // [id, …]  šūnas, kas ar šo savienotas ar savienotāju
+handle.source       // savienotājam: mezgla id līnijas SĀKUMĀ (draw.io source; null, ja gals nav piesaistīts)
+handle.target       // savienotājam: mezgla id līnijas BEIGĀS (draw.io target; null, ja nav piesaistīts)
 handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow }
 handle.clone({ id?, dx?, dy?, patch?, edges? })   // klons ar nobīdi; atgriež jaunu handle
 handle.repeat(list, { cols, gap, edges }, fn)     // klons katram vienumam, režģī; fn(cell, item, i)
@@ -272,8 +274,9 @@ krāsa plūst pati no sevis.
 
 - `animate: 'pulse' | 'blink' | 'none'` — pulsē (vienmērīgi) vai mirgo (soļiem) visu
   šūnu; `'none'` (vai izlaišana) aptur.
-- `flow: <skaitlis ar zīmi>` — plūstošas svītras gar šūnas līnijām; zīme ir virziens,
-  lielums ir ātrums; `0`/`false` aptur.
+- `flow: <skaitlis ar zīmi>` — plūstošas svītras gar šūnas līnijām; zīme ir virziens
+  (**pozitīvs plūst `source`→`target`**, kā līnija ir uzzīmēta), lielums ir ātrums;
+  `0`/`false` aptur.
 - `textAngle: <grādi> | 'edge'` — pagriež šūnas uzrakstu. `'edge'` novieto to
   **paralēli savienotāja līnijai** (leņķis no līnijas ģeometrijas, ar apgriešanu, lai
   teksts nekad nav ar kājām gaisā) — ērti uzrakstiem uz saites, piem. `Rx/Tx`.
