@@ -1168,6 +1168,8 @@ class WidgetDrawio extends CWidget {
 			}));
 		}
 
+		const units = (series[0] && series[0].units) || '';
+
 		let ymin = Infinity;
 		let ymax = -Infinity;
 
@@ -1181,10 +1183,19 @@ class WidgetDrawio extends CWidget {
 			ymax += 1;
 		}
 
-		const ypad = (ymax - ymin) * 0.08;
+		// Zero baseline for non-negative data (rates, counters) so the axis never
+		// dips below 0; keep the data-driven range only when values sit far above 0.
+		if (ymin >= 0 && ymin <= ymax - ymin) {
+			ymin = 0;
+		}
 
-		ymin -= ypad;
-		ymax += ypad;
+		// Snap the range to "nice" numbers so ticks land on 1/2/5·10ⁿ instead of
+		// raw data extremes (…, 8.06e6, 5.11e6, …).
+		const target_rows = 4;
+		const step = this._niceNum((ymax - ymin) / target_rows, true);
+
+		ymin = Math.floor(ymin / step) * step;
+		ymax = Math.ceil(ymax / step) * step;
 
 		const padL = 46;
 		const padR = 10;
@@ -1201,10 +1212,10 @@ class WidgetDrawio extends CWidget {
 		ctx.textAlign = 'right';
 		ctx.lineWidth = 1;
 
-		const rows = 4;
+		const rows = Math.max(1, Math.round((ymax - ymin) / step));
 
 		for (let i = 0; i <= rows; i++) {
-			const v = ymin + (ymax - ymin) * i / rows;
+			const v = ymin + step * i;
 			const y = Y(v);
 
 			ctx.strokeStyle = grid;
@@ -1214,7 +1225,7 @@ class WidgetDrawio extends CWidget {
 			ctx.stroke();
 
 			ctx.fillStyle = fg;
-			ctx.fillText(this._fmtNum(v), padL - 5, y);
+			ctx.fillText(this._fmtUnits(v, units), padL - 5, y);
 		}
 
 		// X labels (start / end of the period).
@@ -1261,7 +1272,7 @@ class WidgetDrawio extends CWidget {
 
 		series.forEach((s, si) => {
 			const last = s.points[s.points.length - 1];
-			const val = last ? this._fmtNum(last[1]) + (s.units ? ' ' + s.units : '') : '';
+			const val = last ? this._fmtUnits(last[1], s.units) : '';
 			const item = document.createElement('span');
 
 			item.className = 'dch-leg';
@@ -1319,6 +1330,47 @@ class WidgetDrawio extends CWidget {
 		}
 
 		return String(Math.round(v * 100) / 100);
+	}
+
+	// Nearest "nice" number (1/2/5/10 · 10ⁿ). `round` snaps to the closest such
+	// number; otherwise rounds up. Used to place Y-axis ticks on round values.
+	_niceNum(x, round) {
+		if (!(x > 0)) {
+			return 1;
+		}
+
+		const exp = Math.floor(Math.log10(x));
+		const f = x / Math.pow(10, exp);
+		let nf;
+
+		if (round) {
+			nf = f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10;
+		}
+		else {
+			nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+		}
+
+		return nf * Math.pow(10, exp);
+	}
+
+	// Humanize a value with its item units, à la Zabbix: 1000-based SI prefixes
+	// (K/M/G/…) for most units, 1024-based for bytes. Empty units → bare number.
+	_fmtUnits(v, units) {
+		if (!units) {
+			return this._fmtNum(v);
+		}
+
+		const base = (units === 'B' || units === 'Bps') ? 1024 : 1000;
+		const prefix = ['', 'K', 'M', 'G', 'T', 'P', 'E'];
+		let val = v;
+		let i = 0;
+
+		while (Math.abs(val) >= base && i < prefix.length - 1) {
+			val /= base;
+			i++;
+		}
+
+		return this._fmtNum(val) + ' ' + prefix[i] + units;
 	}
 
 	_fmtTime(ts, show_date) {
