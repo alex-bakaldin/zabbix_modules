@@ -31,16 +31,14 @@ horizontal carousel**, with four selectable visual styles.
   that size — anything that does not fit is reached by **dragging with the mouse**, on
   **both axes** (thin scrollbar indicators appear). With Min gauge size `0` the grid always
   fits the widget (no scrolling). There is no auto-scroll — panning is manual only.
-- **Four styles**, sharing the same 270° dial geometry:
+- **Three styles**, sharing the same 270° dial geometry:
   - **Retro** — vintage brass bezel, cream face, serif numerals, classic black needle.
   - **Cyberpunk** — dark disc, neon progress arc and glowing needle, monospace readout.
   - **Industrial** — heavy steel bezel with bolts, matte graphite face, bold needle,
     hazard/threshold band near the top.
-  - **Minimal** — no bezel; a flat progress arc and a big centered number, theme-aware
-    (light / dark).
-- **Thresholds**: threshold values define **coloured zones on the dial arc**, and the
-  digital readout (and the progress arc in the Cyberpunk / Minimal styles) takes the
-  colour of the **highest reached threshold**. Threshold zones can be turned off.
+- **Thresholds**: threshold values define **coloured zones on the dial arc** only — the
+  digital readout and the progress arc keep their fixed style colour regardless of the
+  value. Threshold zones can be turned off.
 - **User macros**: **Min**, **Max** and threshold values may be user macros
   (e.g. `{$PRESSURE.MAX}`, `{$WARN}`). They are resolved **per item, against each item's
   own host** — the same macro may resolve to a different number on different hosts, so each
@@ -56,7 +54,7 @@ horizontal carousel**, with four selectable visual styles.
   with the full name and host.
 - **Smooth needle animation** per item (values ease toward their target on every refresh);
   a demo sweep runs when an item has no data. **Theme-aware** (the Retro / Cyberpunk /
-  Industrial faces carry their own backdrop; Minimal follows the dashboard light / dark
+  Industrial faces carry their own backdrop; captions follow the dashboard light / dark
   theme).
 
 ## Configuration
@@ -68,7 +66,7 @@ horizontal carousel**, with four selectable visual styles.
 | **Item patterns** \* | item **name** pattern(s), wildcards `*`. `*` alone = every numeric item on the matched hosts. |
 | **Item tags** | tag filter with **And/Or** or **Or** evaluation. |
 | **Override host** | pin all items to a single host (e.g. on a template dashboard). |
-| **Style** | Retro / Cyberpunk / Industrial / Minimal. |
+| **Style** | Retro / Cyberpunk / Industrial. |
 | **Range** | **Fixed** (Min / Max) or **Auto** (shared, last-hour history ±5%). |
 | **Min**, **Max** | scale bounds. Plain numbers **or** user macros (`{$LOW}`, `{$PRESSURE.MAX}` …). |
 | **Units (override)** | replace the item's own units on the dial. |

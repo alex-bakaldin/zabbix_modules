@@ -10,7 +10,7 @@ podataka, kazaljka izvodi spori demo prelaz. Sve se iscrtava proceduralno na
 
 To je srodni widget u obliku mreže za widget [Thermometer](../thermometer): isti model
 podataka (obrazac + tagovi + makroi po hostu + pragovi), ali raspoređen u **mrežu umesto
-horizontalnog karusela**, sa četiri vizuelna stila koja se mogu birati.
+horizontalnog karusela**, sa tri vizuelna stila koja se mogu birati.
 
 ![Analog gauge styles](docs/styles.png)
 
@@ -31,16 +31,14 @@ horizontalnog karusela**, sa četiri vizuelna stila koja se mogu birati.
   se nikada ne smanjuju ispod te veličine — ono što ne stane dostiže se **prevlačenjem mišem**, po
   **obe ose** (pojavljuju se tanki indikatori klizača). Sa Min gauge size `0` mreža uvek staje u
   widget (bez skrolovanja). Nema automatskog skrolovanja — pomeranje je samo ručno.
-- **Četiri stila**, koji dele istu geometriju brojčanika od 270°:
+- **Tri stila**, koji dele istu geometriju brojčanika od 270°:
   - **Retro** — starinski mesingani okvir, krem lice, serifni brojevi, klasična crna kazaljka.
   - **Cyberpunk** — tamni disk, neonski luk napretka i užarena kazaljka, monospace očitavanje.
   - **Industrial** — masivni čelični okvir sa zavrtnjima, mat grafitno lice, podebljana kazaljka,
     traka opasnosti/praga blizu vrha.
-  - **Minimal** — bez okvira; ravan luk napretka i veliki centrirani broj, prilagođen temi
-    (svetla / tamna).
-- **Pragovi**: vrednosti pragova definišu **obojene zone na luku brojčanika**, a
-  digitalno očitavanje (i luk napretka u stilovima Cyberpunk / Minimal) preuzima
-  boju **najvišeg dostignutog praga**. Zone pragova mogu se isključiti.
+- **Pragovi**: vrednosti pragova definišu **samo obojene zone na luku brojčanika** —
+  digitalno očitavanje i luk napretka zadržavaju fiksnu boju stila bez obzira na vrednost.
+  Zone pragova mogu se isključiti.
 - **Korisnički makroi**: **Min**, **Max** i vrednosti pragova mogu biti korisnički makroi
   (npr. `{$PRESSURE.MAX}`, `{$WARN}`). Oni se razrešavaju **po stavci, u odnosu na sopstveni
   host svake stavke** — isti makro može da se razreši u različit broj na različitim hostovima, pa
@@ -56,7 +54,7 @@ horizontalnog karusela**, sa četiri vizuelna stila koja se mogu birati.
   brojčanika dobijate opis sa punim nazivom i hostom.
 - **Glatka animacija kazaljke** po stavci (vrednosti se pri svakom osvežavanju blago približavaju
   svom cilju); demo prelaz se pokreće kada stavka nema podataka. **Prilagođeno temi** (lica Retro /
-  Cyberpunk / Industrial nose sopstvenu pozadinu; Minimal prati svetlu / tamnu temu kontrolne
+  Cyberpunk / Industrial nose sopstvenu pozadinu; natpisi prate svetlu / tamnu temu kontrolne
   table).
 
 ## Configuration
@@ -68,7 +66,7 @@ horizontalnog karusela**, sa četiri vizuelna stila koja se mogu birati.
 | **Item patterns** \* | obrazac(obrasci) **naziva** stavke, zamenski znaci `*`. Samo `*` = svaka numerička stavka na pronađenim hostovima. |
 | **Item tags** | filter tagova sa **And/Or** ili **Or** evaluacijom. |
 | **Override host** | fiksiraj sve stavke na jedan host (npr. na kontrolnoj tabli šablona). |
-| **Style** | Retro / Cyberpunk / Industrial / Minimal. |
+| **Style** | Retro / Cyberpunk / Industrial. |
 | **Range** | **Fixed** (Min / Max) ili **Auto** (deljeno, istorija poslednjeg sata ±5%). |
 | **Min**, **Max** | granice skale. Obični brojevi **ili** korisnički makroi (`{$LOW}`, `{$PRESSURE.MAX}` …). |
 | **Units (override)** | zameni sopstvene jedinice stavke na brojčaniku. |

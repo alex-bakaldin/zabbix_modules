@@ -11,7 +11,7 @@ graficznych).
 
 Jest to siostrzany, siatkowy odpowiednik widżetu [Thermometer](../thermometer): ten sam
 model danych (wzorzec + tagi + makra per host + progi), ale rozmieszczony na **siatce
-zamiast poziomej karuzeli**, z czterema wybieralnymi stylami wizualnymi.
+zamiast poziomej karuzeli**, z trzema wybieralnymi stylami wizualnymi.
 
 ![Analog gauge styles](docs/styles.png)
 
@@ -33,17 +33,15 @@ zamiast poziomej karuzeli**, z czterema wybieralnymi stylami wizualnymi.
   **przeciągając myszą**, na **obu osiach** (pojawiają się cienkie wskaźniki paska
   przewijania). Przy Min gauge size `0` siatka zawsze mieści się w widżecie (bez przewijania).
   Nie ma automatycznego przewijania — panoramowanie jest wyłącznie ręczne.
-- **Cztery style**, dzielące tę samą geometrię tarczy 270°:
+- **Trzy style**, dzielące tę samą geometrię tarczy 270°:
   - **Retro** — zabytkowa mosiężna obwódka, kremowa tarcza, szeryfowe cyfry, klasyczna czarna
     wskazówka.
   - **Cyberpunk** — ciemny dysk, neonowy łuk postępu i świecąca wskazówka, monospace'owy odczyt.
   - **Industrial** — masywna stalowa obwódka ze śrubami, matowa grafitowa tarcza, pogrubiona
     wskazówka, pas ostrzegawczy/progowy przy górze.
-  - **Minimal** — bez obwódki; płaski łuk postępu i duża wyśrodkowana liczba, dopasowana do
-    motywu (jasny / ciemny).
-- **Progi**: wartości progów definiują **kolorowe strefy na łuku tarczy**, a cyfrowy odczyt
-  (oraz łuk postępu w stylach Cyberpunk / Minimal) przyjmuje kolor **najwyższego osiągniętego
-  progu**. Strefy progowe można wyłączyć.
+- **Progi**: wartości progów definiują **wyłącznie kolorowe strefy na łuku tarczy** — cyfrowy
+  odczyt i łuk postępu zachowują stały kolor stylu niezależnie od wartości. Strefy progowe
+  można wyłączyć.
 - **Makra użytkownika**: **Min**, **Max** oraz wartości progów mogą być makrami użytkownika
   (np. `{$PRESSURE.MAX}`, `{$WARN}`). Są rozwiązywane **per element, względem własnego hosta
   danego elementu** — to samo makro może rozwiązać się do innej liczby na różnych hostach,
@@ -60,8 +58,8 @@ zamiast poziomej karuzeli**, z czterema wybieralnymi stylami wizualnymi.
   tarczę, aby uzyskać dymek z pełną nazwą i hostem.
 - **Płynna animacja wskazówki** dla każdego elementu (wartości płynnie zmierzają do celu przy
   każdym odświeżeniu); pokazowy ruch omiatający uruchamia się, gdy element nie ma danych.
-  **Dopasowanie do motywu** (tarcze Retro / Cyberpunk / Industrial mają własne tło; Minimal
-  podąża za jasnym / ciemnym motywem pulpitu).
+  **Dopasowanie do motywu** (tarcze Retro / Cyberpunk / Industrial mają własne tło; podpisy
+  podążają za jasnym / ciemnym motywem pulpitu).
 
 ## Konfiguracja
 
@@ -72,7 +70,7 @@ zamiast poziomej karuzeli**, z czterema wybieralnymi stylami wizualnymi.
 | **Item patterns** \* | wzorzec(-ce) **nazw** elementów, symbole wieloznaczne `*`. Samo `*` = każdy element numeryczny na dopasowanych hostach. |
 | **Item tags** | filtr tagów z ewaluacją **And/Or** lub **Or**. |
 | **Override host** | przypina wszystkie elementy do jednego hosta (np. na pulpicie szablonu). |
-| **Style** | Retro / Cyberpunk / Industrial / Minimal. |
+| **Style** | Retro / Cyberpunk / Industrial. |
 | **Range** | **Fixed** (Min / Max) lub **Auto** (wspólny, historia ostatniej godziny ±5%). |
 | **Min**, **Max** | granice skali. Zwykłe liczby **lub** makra użytkownika (`{$LOW}`, `{$PRESSURE.MAX}` …). |
 | **Units (override)** | zastępuje własne jednostki elementu na tarczy. |

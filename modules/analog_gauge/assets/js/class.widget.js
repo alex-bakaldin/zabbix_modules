@@ -7,13 +7,12 @@
  * Каждый айтем анимирует стрелку к своему значению (опционально — мелко дрожит,
  * имитируя работающий прибор); при отсутствии данных крутит демо-развёртку.
  * Диапазон/пороги — свои у каждого айтема (макросы раскрыты по его хосту). Четыре
- * оформления (Retro / Cyberpunk / Industrial / Minimal) делят общую геометрию
+ * оформления (Retro / Cyberpunk / Industrial) делят общую геометрию
  * циферблата (дуга 270°), отличаясь только «хромом».
  */
 const STYLE_RETRO = 0;
 const STYLE_CYBER = 1;
 const STYLE_INDUSTRIAL = 2;
-const STYLE_MINIMAL = 3;
 
 const GAUGE_A0 = Math.PI * 0.75;      // начало дуги (низ-слева)
 const GAUGE_SWEEP = Math.PI * 1.5;    // 270°
@@ -69,20 +68,6 @@ class WidgetAnalogGauge extends CWidgetGaugeBase {
         const min = Number(item.min);
         const max = Number(item.max);
         return {min: Number.isFinite(min) ? min : 0, max: Number.isFinite(max) ? max : 100};
-    }
-
-    // Цвет по достигнутому порогу (наибольший порог ≤ value); иначе fallback.
-    _valueColor(v, has_val, thresholds, fallback) {
-        if (!has_val || !Array.isArray(thresholds)) {
-            return fallback;
-        }
-        let color = fallback;
-        for (const t of thresholds) {
-            if (v >= Number(t.value)) {
-                color = t.color;
-            }
-        }
-        return color;
     }
 
     // Пороговые зоны на дуге: от каждого порога до следующего — его цветом (участок ниже
@@ -287,9 +272,6 @@ class WidgetAnalogGauge extends CWidgetGaugeBase {
             else if (style === STYLE_INDUSTRIAL) {
                 this._drawIndustrial(ctx, g);
             }
-            else if (style === STYLE_MINIMAL) {
-                this._drawMinimal(ctx, g);
-            }
             else {
                 this._drawRetro(ctx, g);
             }
@@ -461,10 +443,9 @@ class WidgetAnalogGauge extends CWidgetGaugeBase {
             ctx.fillText(g.units, cx, cy + faceR * 0.4);
         }
 
-        // Цифровое значение
+        // Цифровое значение (цвет не зависит от порогов — пороги только на циферблате)
         if (g.show_value) {
-            const vcol = this._valueColor(g.value, g.has_val, g.thresholds, '#7a1f16');
-            ctx.fillStyle = vcol;
+            ctx.fillStyle = '#7a1f16';
             ctx.font = `700 ${Math.round(faceR * 0.2)}px Georgia, serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -555,19 +536,19 @@ class WidgetAnalogGauge extends CWidgetGaugeBase {
         const trackW = Math.max(3, R * 0.08);
         this._arc(ctx, cx, cy, trackR, GAUGE_A0, GAUGE_A0 + GAUGE_SWEEP, 'rgba(0,229,255,0.12)', trackW, 'round');
 
-        // Пороговые зоны (неоновые)
+        // Пороговые зоны (неоновые) — отдельным внешним кольцом БОЛЬШЕГО радиуса,
+        // чтобы не сливаться с дугой-прогрессом.
         ctx.save();
         ctx.shadowColor = accent;
         ctx.shadowBlur = R * 0.12;
-        this._drawBands(ctx, g, trackR, trackW, 'round');
+        this._drawBands(ctx, g, faceR * 0.92, Math.max(2, R * 0.045), 'round');
         ctx.restore();
 
-        // Прогресс до значения
+        // Прогресс до значения — цвет фиксированный (не зависит от порогов).
         ctx.save();
         ctx.shadowColor = neon;
         ctx.shadowBlur = R * 0.14;
-        this._arc(ctx, cx, cy, trackR, GAUGE_A0, angle,
-            this._valueColor(g.value, g.has_val, g.thresholds, neon), trackW, 'round');
+        this._arc(ctx, cx, cy, trackR, GAUGE_A0, angle, neon, trackW, 'round');
         ctx.restore();
 
         // Тики
@@ -604,9 +585,7 @@ class WidgetAnalogGauge extends CWidgetGaugeBase {
             ctx.save();
             ctx.shadowColor = neon;
             ctx.shadowBlur = R * 0.12;
-            ctx.fillStyle = g.has_val
-                ? this._valueColor(g.value, g.has_val, g.thresholds, '#d8feff')
-                : '#5f7a86';
+            ctx.fillStyle = g.has_val ? '#d8feff' : '#5f7a86';
             ctx.font = `700 ${Math.round(faceR * 0.24)}px "Consolas", "Menlo", monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -688,7 +667,7 @@ class WidgetAnalogGauge extends CWidgetGaugeBase {
             ctx.fillText(g.units, cx, cy + faceR * 0.42);
         }
         if (g.show_value) {
-            ctx.fillStyle = this._valueColor(g.value, g.has_val, g.thresholds, '#f5c518');
+            ctx.fillStyle = '#f5c518';
             ctx.font = `700 ${Math.round(faceR * 0.2)}px "Arial Narrow", Arial, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -735,59 +714,6 @@ class WidgetAnalogGauge extends CWidgetGaugeBase {
         ctx.stroke();
     }
 
-    // --- MINIMAL: плоская дуга-прогресс + крупное число ----------------------
-
-    _drawMinimal(ctx, g) {
-        const {cx, cy, R} = g;
-        const angle = GAUGE_A0 + g.frac * GAUGE_SWEEP + (g.jitter || 0);
-        const ink = g.dark ? '#e6edf3' : '#26313a';
-        const track = g.dark ? 'rgba(230,237,243,0.14)' : 'rgba(38,49,58,0.12)';
-        const accent = g.dark ? '#4aa3ff' : '#2f81f7';
-        const trackR = R * 0.9;
-        const trackW = Math.max(3, R * 0.09);
-
-        // Дорожка
-        this._arc(ctx, cx, cy, trackR, GAUGE_A0, GAUGE_A0 + GAUGE_SWEEP, track, trackW, 'round');
-
-        // Пороговые зоны (тонкие, снаружи)
-        this._drawBands(ctx, g, trackR + trackW * 0.75, Math.max(2, R * 0.03), 'round');
-
-        // Прогресс
-        const vcol = this._valueColor(g.value, g.has_val, g.thresholds, accent);
-        this._arc(ctx, cx, cy, trackR, GAUGE_A0, angle, vcol, trackW, 'round');
-
-        // Кончик-точка
-        const [dx, dy] = this._polar(cx, cy, trackR, angle);
-        ctx.beginPath();
-        ctx.arc(dx, dy, trackW * 0.6, 0, Math.PI * 2);
-        ctx.fillStyle = vcol;
-        ctx.fill();
-
-        // Крупное значение
-        if (g.show_value) {
-            ctx.fillStyle = ink;
-            ctx.font = `700 ${Math.round(R * 0.34)}px "Segoe UI", Arial, sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(g.has_val ? this._fmt(g.value, g.decimals) : '—', cx, cy - R * 0.02);
-            if (g.units) {
-                ctx.fillStyle = g.dark ? 'rgba(230,237,243,0.6)' : 'rgba(38,49,58,0.55)';
-                ctx.font = `${Math.round(R * 0.14)}px "Segoe UI", Arial, sans-serif`;
-                ctx.fillText(g.units, cx, cy + R * 0.34);
-            }
-        }
-
-        // Мини-подписи min/max у концов дуги
-        ctx.fillStyle = g.dark ? 'rgba(230,237,243,0.45)' : 'rgba(38,49,58,0.45)';
-        ctx.font = `${Math.round(R * 0.11)}px "Segoe UI", Arial, sans-serif`;
-        const [mnx, mny] = this._polar(cx, cy, trackR, GAUGE_A0);
-        const [mxx, mxy] = this._polar(cx, cy, trackR, GAUGE_A0 + GAUGE_SWEEP);
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(this._fmt(g.min, Number.isInteger(g.min) ? 0 : 1), mnx, mny + trackW * 0.6);
-        ctx.fillText(this._fmt(g.max, Number.isInteger(g.max) ? 0 : 1), mxx, mxy + trackW * 0.6);
-    }
-
     // --- подписи / подсказки --------------------------------------------------
 
     _drawCaption(ctx, style, cx, cy, maxW, text, dark) {
@@ -798,11 +724,8 @@ class WidgetAnalogGauge extends CWidgetGaugeBase {
         else if (style === STYLE_INDUSTRIAL) {
             ink = '#c9ced3';
         }
-        else if (style === STYLE_RETRO) {
-            ink = dark ? '#d8c69a' : '#6b5324';
-        }
         else {
-            ink = dark ? 'rgba(230,237,243,0.75)' : 'rgba(38,49,58,0.7)';
+            ink = dark ? '#d8c69a' : '#6b5324';
         }
         const fs = Math.max(9, Math.min(14, Math.round(maxW * 0.09)));
         ctx.font = `${fs}px Arial, sans-serif`;

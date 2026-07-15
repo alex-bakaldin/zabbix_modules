@@ -25,8 +25,8 @@ use Zabbix\Widgets\Fields\{
  *
  * Items are selected by name pattern across pattern-matched hosts (hidden on a
  * template dashboard) and filtered by tags — like the SVG graph widget. Each
- * matching item is drawn as its own dial, tiled on a grid. Four visual styles
- * (retro / cyberpunk / industrial / minimal) share the same geometry.
+ * matching item is drawn as its own dial, tiled on a grid. Three visual styles
+ * (retro / cyberpunk / industrial) share the same geometry.
  */
 class WidgetForm extends CWidgetForm {
 
@@ -36,7 +36,6 @@ class WidgetForm extends CWidgetForm {
     public const STYLE_RETRO = 0;
     public const STYLE_CYBER = 1;
     public const STYLE_INDUSTRIAL = 2;
-    public const STYLE_MINIMAL = 3;
 
     public function addFields(): self {
         return $this
@@ -70,8 +69,7 @@ class WidgetForm extends CWidgetForm {
                 (new CWidgetFieldSelect('style', _('Style'), [
                     self::STYLE_RETRO => _('Retro'),
                     self::STYLE_CYBER => _('Cyberpunk'),
-                    self::STYLE_INDUSTRIAL => _('Industrial'),
-                    self::STYLE_MINIMAL => _('Minimal')
+                    self::STYLE_INDUSTRIAL => _('Industrial')
                 ]))->setDefault(self::STYLE_RETRO)
             )
             ->addField(

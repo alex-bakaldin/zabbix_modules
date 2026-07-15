@@ -10,7 +10,7 @@ Viss tiek zīmēts procedurāli uz `<canvas>` (bez attēlu resursiem).
 
 Tas ir [Thermometer](../thermometer) vidžeta režģa māsasvidžets: tāds pats datu modelis
 (šablons + birkas + katram resursdatoram atbilstoši makro + sliekšņi), taču izkārtots
-**režģī, nevis horizontālā karuselī**, ar četriem izvēlamiem vizuālajiem stiliem.
+**režģī, nevis horizontālā karuselī**, ar trim izvēlamiem vizuālajiem stiliem.
 
 ![Analog gauge styles](docs/styles.png)
 
@@ -32,17 +32,15 @@ Tas ir [Thermometer](../thermometer) vidžeta režģa māsasvidžets: tāds pats
   **abām asīm** (parādās plāni ritjoslu indikatori). Ar Min gauge size `0` režģis vienmēr
   ietilpst vidžetā (bez ritināšanas). Nav automātiskās ritināšanas — panoramēšana ir tikai
   manuāla.
-- **Četri stili**, kuriem ir vienāda 270° ciparnīcas ģeometrija:
+- **Trīs stili**, kuriem ir vienāda 270° ciparnīcas ģeometrija:
   - **Retro** — vintāžas misiņa apmale, krēmkrāsas priekšpuse, serifa cipari, klasiska melna
     adata.
   - **Cyberpunk** — tumšs disks, neona progresa loks un mirdzoša adata, monospace rādījums.
   - **Industrial** — smaga tērauda apmale ar skrūvēm, matēta grafīta priekšpuse, treknraksta
     adata, bīstamības/sliekšņa josla tuvu augšpusei.
-  - **Minimal** — bez apmales; plakans progresa loks un liels centrēts skaitlis, pielāgojas
-    tēmai (gaišs / tumšs).
-- **Sliekšņi**: sliekšņu vērtības nosaka **krāsainas zonas uz ciparnīcas loka**, un ciparu
-  rādījums (kā arī progresa loks Cyberpunk / Minimal stilos) iegūst **augstākā sasniegtā
-  sliekšņa** krāsu. Sliekšņu zonas var izslēgt.
+- **Sliekšņi**: sliekšņu vērtības nosaka **tikai krāsainas zonas uz ciparnīcas loka** — ciparu
+  rādījums un progresa loks saglabā fiksēto stila krāsu neatkarīgi no vērtības. Sliekšņu zonas
+  var izslēgt.
 - **Lietotāja makro**: **Min**, **Max** un sliekšņu vērtības var būt lietotāja makro
   (piem., `{$PRESSURE.MAX}`, `{$WARN}`). Tie tiek atrisināti **katram elementam atsevišķi,
   attiecībā pret katra elementa paša resursdatoru** — viens un tas pats makro dažādos
@@ -59,7 +57,7 @@ Tas ir [Thermometer](../thermometer) vidžeta režģa māsasvidžets: tāds pats
   virziet kursoru virs ciparnīcas, lai iegūtu rīka padomu ar pilnu nosaukumu un resursdatoru.
 - **Vienmērīga adatas animācija** katram elementam (vērtības pakāpeniski virzās uz savu mērķi
   katrā atsvaidzināšanā); demonstrācijas slaucīšana tiek izpildīta, kad elementam nav datu.
-  **Pielāgojas tēmai** (Retro / Cyberpunk / Industrial priekšpuses nes savu fonu; Minimal seko
+  **Pielāgojas tēmai** (Retro / Cyberpunk / Industrial priekšpuses nes savu fonu; paraksti seko
   informācijas paneļa gaišajai / tumšajai tēmai).
 
 ## Konfigurācija
@@ -71,7 +69,7 @@ Tas ir [Thermometer](../thermometer) vidžeta režģa māsasvidžets: tāds pats
 | **Item patterns** \* | elementa **nosaukuma** šablons(-i), aizstājējzīmes `*`. `*` viens pats = katrs skaitliskais elements atbilstošajos resursdatoros. |
 | **Item tags** | birku filtrs ar **And/Or** vai **Or** aprēķinu. |
 | **Override host** | piesaista visus elementus vienam resursdatoram (piem., veidnes informācijas panelī). |
-| **Style** | Retro / Cyberpunk / Industrial / Minimal. |
+| **Style** | Retro / Cyberpunk / Industrial. |
 | **Range** | **Fixed** (Min / Max) vai **Auto** (koplietots, pēdējās stundas vēsture ±5%). |
 | **Min**, **Max** | mēroga robežas. Vienkārši skaitļi **vai** lietotāja makro (`{$LOW}`, `{$PRESSURE.MAX}` …). |
 | **Units (override)** | aizstāj elementa paša mērvienības uz ciparnīcas. |
