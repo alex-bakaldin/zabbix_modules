@@ -4,7 +4,8 @@ namespace Modules\Drawio\Actions;
 
 use API,
     CControllerDashboardWidgetView,
-    CControllerResponseData;
+    CControllerResponseData,
+    CHintBoxHelper;
 
 use Modules\Drawio\Includes\CItemsHelper;
 
@@ -20,6 +21,15 @@ class WidgetView extends CControllerDashboardWidgetView {
 
     private const ITEM_LIMIT = 500;
     private const TRIGGER_LIMIT = 500;
+
+    protected function init(): void {
+        parent::init();
+
+        // Sent by the JS when the widget uses its own (not the dashboard's) time period.
+        $this->addValidationRules([
+            'has_custom_time_period' => 'in 1'
+        ]);
+    }
 
     protected function doAction(): void {
         $templateid = $this->getInput('templateid', '');
@@ -56,6 +66,7 @@ class WidgetView extends CControllerDashboardWidgetView {
             ]);
 
             $hosts[$hostid]['items'][] = [
+                'itemid' => $item['itemid'],
                 'key' => $item['key_'],
                 'name' => $item['name'],
                 'value_type' => (int) $item['value_type'],
@@ -75,6 +86,11 @@ class WidgetView extends CControllerDashboardWidgetView {
             'diagram' => $this->fields_values['diagram'],
             'script' => $this->fields_values['script'],
             'hosts' => array_values($hosts),
+            // Resolved absolute range for the chart hints (hint.history).
+            'time_period' => [
+                'from' => (int) $this->fields_values['time_period']['from_ts'],
+                'to' => (int) $this->fields_values['time_period']['to_ts']
+            ],
             'user' => [
                 'debug_mode' => $this->getDebugMode()
             ]
@@ -101,20 +117,66 @@ class WidgetView extends CControllerDashboardWidgetView {
             'limit' => self::TRIGGER_LIMIT
         ]);
 
+        $problem_events = $this->problemEvents($triggers);
+
         foreach ($triggers as $trigger) {
+            $model = [
+                'triggerid' => $trigger['triggerid'],
+                'description' => $trigger['description'],
+                'priority' => (int) $trigger['priority'],
+                'status' => (int) $trigger['status'],
+                'value' => (int) $trigger['value'],
+                'tags' => self::tags($trigger['tags'] ?? [])
+            ];
+
+            // A ready-to-use native "event list" hintbox spec for the trigger's current
+            // problem (see hint.preload in the docs) — the script can drop it straight
+            // into set({interact:{hint:{preload: trigger.event_hint}}}). Only present
+            // while the trigger has an open problem (eventid_till is required).
+            if (array_key_exists($trigger['triggerid'], $problem_events)) {
+                $model['event_hint'] = CHintBoxHelper::getEventList(
+                    $trigger['triggerid'], $problem_events[$trigger['triggerid']]
+                );
+            }
+
             foreach ($trigger['hosts'] as $host) {
                 if (array_key_exists($host['hostid'], $hosts)) {
-                    $hosts[$host['hostid']]['triggers'][] = [
-                        'triggerid' => $trigger['triggerid'],
-                        'description' => $trigger['description'],
-                        'priority' => (int) $trigger['priority'],
-                        'status' => (int) $trigger['status'],
-                        'value' => (int) $trigger['value'],
-                        'tags' => self::tags($trigger['tags'] ?? [])
-                    ];
+                    $hosts[$host['hostid']]['triggers'][] = $model;
                 }
             }
         }
+    }
+
+    /**
+     * Map triggerid => latest open-problem eventid, for the given triggers. Used as
+     * `eventid_till` when building the native event-list hintbox.
+     */
+    private function problemEvents(array $triggers): array {
+        $triggerids = array_column($triggers, 'triggerid');
+
+        if (!$triggerids) {
+            return [];
+        }
+
+        $problems = API::Problem()->get([
+            'output' => ['eventid', 'objectid'],
+            'source' => EVENT_SOURCE_TRIGGERS,
+            'object' => EVENT_OBJECT_TRIGGER,
+            'objectids' => $triggerids,
+            'sortfield' => ['eventid'],
+            'sortorder' => ZBX_SORT_DOWN
+        ]);
+
+        $map = [];
+
+        // Sorted newest-first, so the first eventid seen per trigger is the latest.
+        foreach ($problems as $problem) {
+            if (!array_key_exists($problem['objectid'], $map)) {
+                $map[$problem['objectid']] = $problem['eventid'];
+            }
+        }
+
+        return $map;
     }
 
     /**

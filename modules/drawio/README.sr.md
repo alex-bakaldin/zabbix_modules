@@ -119,6 +119,7 @@ pregled) ili nalepite izvor.
 | **Item patterns** | koje stavke razrešiti i ubaciti |
 | **Item tags** | filter po tagovima (And/Or) |
 | **Override host** | dinamički/override host za šablonske table |
+| **Time period** | opseg za chart-hintove (`hint.history`) — tabla, prilagođeni opseg ili drugi vidžet |
 
 ### Forma za uređivanje
 
@@ -148,8 +149,8 @@ Ugovor — telo skripte se izvršava kao `(hosts, cells, api)`:
 [
   { host: 'Router A', hostid: '10105', tags: [ { tag, value }, … ],
     macros: { '{$SNMP_COMMUNITY}': 'public', '{$TEMP.CRIT}': '85', … },
-    items:    [ { key, name, value, units, value_type, clock, tags: [ { tag, value }, … ] }, … ],
-    triggers: [ { triggerid, description, priority, status, value, tags: [ { tag, value }, … ] }, … ] }
+    items:    [ { itemid, key, name, value, units, value_type, clock, tags: [ { tag, value }, … ] }, … ],
+    triggers: [ { triggerid, description, priority, status, value, tags: […], event_hint }, … ] }
 ]
 ```
 
@@ -177,7 +178,7 @@ handle.bbox         // { x, y, width, height }
 handle.neighbors    // [id, …]  ćelije povezane sa ovom konektorom
 handle.source       // za konektor: id čvora na POČETKU linije (draw.io source; null ako kraj nije spojen)
 handle.target       // za konektor: id čvora na KRAJU linije (draw.io target; null ako nije spojen)
-handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow }
+handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow, interact }
 handle.clone({ id?, dx?, dy?, patch?, edges? })   // klon sa pomerajem; vraća novi handle
 handle.repeat(list, { cols, gap, edges }, fn)     // klon po svakoj stavci, u mreži; fn(cell, item, i)
 handle.remove({ edges? })
@@ -294,6 +295,31 @@ if (net) cells.byLabel('eth0').set({ flow: api.scale(+net.value, 0, 1e9, 0.3, 4)
 > Pošto stvarni SVG opstaje između osvežavanja, animacija ostaje uključena dok je
 > skripta ne isključi — uvek postavite „isključenu“ granu (`animate:'none'`, `flow:0`)
 > kada uslov prestane da važi.
+
+### Interaktivnost
+
+`set({ interact })` čini ćeliju osetljivom na miš. To je čista deklaracija — vidžet je
+pretvara u standardno ponašanje Zabbix-a, pa se **nikakav korisnički kod ne izvršava na
+stranici**. Kao i ostala polja, **lepljivo** je; `{}` ga briše.
+
+```js
+cells.get('reactor').set({ interact: {
+  hint: { html: '<b>' + item.name + '</b><br>' + item.value + ' ' + item.units }, // ili { text }
+  menu: { type: 'item', itemid: item.itemid }   // nativni Zabbix meni (desni klik)
+} });
+```
+
+- `hint: { html } | { text }` — sopstveni oblačić na prelaz miša; `{ preload: { type, data } }` —
+  nativni, server-renderovan hintbox (widget sam dovlači HTML): `type:'eventlist'` (problemi
+  triggera) ili `'eventactions'` (istorija događaja). Za tekuće probleme: `hint:{ preload: trigger.event_hint }`.
+- `hint: { history: { '<Kartica>': [itemid, …], … } }` — **živi grafikon istorije** (Canvas), kartica po
+  oznaci, za **Time period** vidžeta; učitava se u stranicama do 500 vrednosti (prvo najnovije,
+  svaka sledeća od poslednje primljene).
+- `menu: { type:'item', itemid } | { type:'host', hostid } | { type:'trigger', triggerid }` —
+  isti kontekstni meni kao svuda u Zabbix-u (Poslednji podaci, Grafik, Okidači, skripte…).
+- `links: [{ label, url, target }]` — sopstveni meni desnog klika; ima prednost nad `menu`.
+
+Id-ovi dolaze iz ubačenih podataka: `item.itemid`, `host.hostid`, `trigger.triggerid`.
 
 ### Otklanjanje grešaka
 

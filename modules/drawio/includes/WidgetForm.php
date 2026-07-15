@@ -2,6 +2,8 @@
 
 namespace Modules\Drawio\Includes;
 
+use CWidgetsData;
+
 use Zabbix\Widgets\{
     CWidgetField,
     CWidgetForm
@@ -13,7 +15,8 @@ use Zabbix\Widgets\Fields\{
     CWidgetFieldPatternSelectHost,
     CWidgetFieldPatternSelectItem,
     CWidgetFieldRadioButtonList,
-    CWidgetFieldTags
+    CWidgetFieldTags,
+    CWidgetFieldTimePeriod
 };
 
 /**
@@ -71,6 +74,18 @@ class WidgetForm extends CWidgetForm {
             )
             ->addField(
                 new CWidgetFieldMultiSelectOverrideHost()
+            )
+            // Time period for the chart hints (hint.history). Follows the dashboard's
+            // time selector by default; can be set to a custom range or taken from
+            // another widget, like the graph widgets.
+            ->addField(
+                (new CWidgetFieldTimePeriod('time_period', _('Time period')))
+                    ->setDefault([
+                        CWidgetField::FOREIGN_REFERENCE_KEY => CWidgetField::createTypedReference(
+                            CWidgetField::REFERENCE_DASHBOARD, CWidgetsData::DATA_TYPE_TIME_PERIOD
+                        )
+                    ])
+                    ->setDefaultPeriod(['from' => 'now-1h', 'to' => 'now'])
             );
     }
 

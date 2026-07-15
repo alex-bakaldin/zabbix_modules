@@ -120,6 +120,7 @@ lub wklej źródło.
 | **Item patterns** | które elementy rozwiązać i wstrzyknąć |
 | **Item tags** | filtr po tagach (And/Or) |
 | **Override host** | dynamiczny/nadpisujący host dla pulpitów szablonowych |
+| **Time period** | zakres dla wykresów w podpowiedziach (`hint.history`) — pulpit, własny zakres lub inny widżet |
 
 ### Formularz edycji
 
@@ -150,8 +151,8 @@ Kontrakt — ciało skryptu wykonuje się jako `(hosts, cells, api)`:
 [
   { host: 'Router A', hostid: '10105', tags: [ { tag, value }, … ],
     macros: { '{$SNMP_COMMUNITY}': 'public', '{$TEMP.CRIT}': '85', … },
-    items:    [ { key, name, value, units, value_type, clock, tags: [ { tag, value }, … ] }, … ],
-    triggers: [ { triggerid, description, priority, status, value, tags: [ { tag, value }, … ] }, … ] }
+    items:    [ { itemid, key, name, value, units, value_type, clock, tags: [ { tag, value }, … ] }, … ],
+    triggers: [ { triggerid, description, priority, status, value, tags: […], event_hint }, … ] }
 ]
 ```
 
@@ -180,7 +181,7 @@ handle.bbox         // { x, y, width, height }
 handle.neighbors    // [id, …]  komórki połączone z tą łącznikiem
 handle.source       // dla łącznika: id węzła na POCZĄTKU linii (draw.io source; null, gdy koniec niepodłączony)
 handle.target       // dla łącznika: id węzła na KOŃCU linii (draw.io target; null, gdy niepodłączony)
-handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow }
+handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow, interact }
 handle.clone({ id?, dx?, dy?, patch?, edges? })   // klon z przesunięciem; zwraca nowy handle
 handle.repeat(list, { cols, gap, edges }, fn)     // klon dla każdego elementu, w siatce; fn(cell, item, i)
 handle.remove({ edges? })
@@ -297,6 +298,32 @@ if (net) cells.byLabel('eth0').set({ flow: api.scale(+net.value, 0, 1e9, 0.3, 4)
 > Ponieważ rzeczywisty SVG utrzymuje się między odświeżeniami, animacja pozostaje
 > włączona, dopóki skrypt jej nie wyłączy — zawsze ustawiaj gałąź „wyłącz”
 > (`animate:'none'`, `flow:0`), gdy warunek przestaje obowiązywać.
+
+### Interaktywność
+
+`set({ interact })` sprawia, że komórka reaguje na mysz. To czysta deklaracja — widżet
+zamienia ją w standardowe zachowanie Zabbiksa, więc **na stronie nie wykonuje się żaden
+kod użytkownika**. Jak inne pola, jest **lepkie**; `{}` je czyści.
+
+```js
+cells.get('reactor').set({ interact: {
+  hint: { html: '<b>' + item.name + '</b><br>' + item.value + ' ' + item.units }, // lub { text }
+  menu: { type: 'item', itemid: item.itemid }   // natywne menu Zabbiksa (prawy klik)
+} });
+```
+
+- `hint: { html } | { text }` — własny dymek po najechaniu; `{ preload: { type, data } }` —
+  natywny hintbox renderowany przez serwer (widget sam pobiera HTML): `type:'eventlist'`
+  (problemy wyzwalacza) lub `'eventactions'` (historia zdarzenia). Dla bieżących problemów:
+  `hint:{ preload: trigger.event_hint }`.
+- `hint: { history: { '<Zakładka>': [itemid, …], … } }` — **wykres historii na żywo** (Canvas), zakładka
+  na etykietę, za **Time period** widżetu; ładowany stronami do 500 wartości (najpierw najnowsze,
+  każda kolejna od ostatniej otrzymanej).
+- `menu: { type:'item', itemid } | { type:'host', hostid } | { type:'trigger', triggerid }` —
+  to samo menu kontekstowe co wszędzie w Zabbiksie (Najnowsze dane, Wykres, Wyzwalacze, skrypty…).
+- `links: [{ label, url, target }]` — własne menu prawego kliknięcia; ma pierwszeństwo przed `menu`.
+
+Identyfikatory pochodzą z wstrzykniętych danych: `item.itemid`, `host.hostid`, `trigger.triggerid`.
 
 ### Debugowanie
 

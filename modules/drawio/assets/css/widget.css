@@ -67,3 +67,97 @@
 @keyframes drawio-flow {
 	to { stroke-dashoffset: -12; }
 }
+
+/* --- chart hints (hint.history) -----------------------------------------
+ * A live, tabbed history graph drawn on hover. The popup lives at document
+ * body level (outside the widget), so it is styled globally; it is theme-aware
+ * via the .dch-dark class the widget toggles from the active Zabbix theme.
+ */
+.drawio-charthint {
+	position: fixed;
+	z-index: 1200;
+	padding: 6px 7px;
+	border-radius: 5px;
+	box-shadow: 0 6px 24px rgba(0, 0, 0, .4);
+	font: 12px system-ui, sans-serif;
+	background: #ffffff;
+	color: #33404d;
+	border: 1px solid #c9d2dc;
+}
+
+.drawio-charthint.dch-dark {
+	background: #10151b;
+	color: #c8d6e5;
+	border-color: #2b3a4a;
+}
+
+.drawio-charthint .dch-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	margin-bottom: 5px;
+}
+
+.drawio-charthint .dch-tab {
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	padding: 3px 9px;
+	border-radius: 3px;
+	opacity: .6;
+}
+
+.drawio-charthint .dch-tab:hover {
+	opacity: .9;
+}
+
+.drawio-charthint .dch-tab.dch-active {
+	opacity: 1;
+	font-weight: 600;
+	background: rgba(127, 150, 180, .18);
+}
+
+.drawio-charthint .dch-body {
+	line-height: 0;
+}
+
+.drawio-charthint .dch-body canvas {
+	display: block;
+}
+
+.drawio-charthint .dch-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	margin-top: 5px;
+	max-width: 380px;
+}
+
+.drawio-charthint .dch-leg {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	max-width: 190px;
+}
+
+.drawio-charthint .dch-leg i {
+	width: 9px;
+	height: 9px;
+	border-radius: 2px;
+	flex: 0 0 auto;
+}
+
+.drawio-charthint .dch-leg b {
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.drawio-charthint .dch-leg em {
+	opacity: .7;
+	font-style: normal;
+	white-space: nowrap;
+}

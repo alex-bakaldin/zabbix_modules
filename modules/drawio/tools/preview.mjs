@@ -244,6 +244,15 @@ function buildHtml({diagram, script, hosts, runtime, css, live = false, version 
          white-space: pre-wrap; }
   #log:empty { display: none; }
   #log div { padding: 3px 12px; border-top: 1px solid #22384a; }
+  .pv-hint { position: fixed; z-index: 999; max-width: 320px; padding: 6px 10px;
+             background: #1b2733; color: #e6eef5; border: 1px solid #3a516a; border-radius: 4px;
+             font: 12px/1.45 system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0,0,0,.4); pointer-events: none; }
+  .pv-menu { position: fixed; z-index: 1000; min-width: 160px; padding: 4px 0;
+             background: #1b2733; border: 1px solid #3a516a; border-radius: 4px;
+             box-shadow: 0 6px 20px rgba(0,0,0,.5); font: 13px system-ui, sans-serif; }
+  .pv-menu-item { display: block; padding: 5px 14px; color: #cfe0f0; text-decoration: none; white-space: nowrap; }
+  a.pv-menu-item:hover { background: #2a3d52; color: #fff; }
+  .pv-menu-item.pv-disabled { color: #7f93a6; font-style: italic; }
 ${css}
 </style>
 
@@ -329,6 +338,90 @@ document.getElementById('theme').onclick = () => {
 	stage.classList.toggle('light');
 	stage.classList.toggle('dark');
 };
+
+// --- preview-only interactivity ------------------------------------------
+// The live widget drives Zabbix's own hintBox / menuPopup, which aren't present
+// here. This standalone shim reads the SAME attributes the runtime stamps
+// (data-hintbox-html, data-menu-popup, ._drawio_links) so hover hints and custom
+// link menus are visible while authoring; native item/host/trigger menus can only
+// resolve on the live instance, so they show a placeholder here.
+(function () {
+	const body = document.getElementById('body');
+	let hint = null, menu = null;
+
+	const closeHint = () => { if (hint) { hint.remove(); hint = null; } };
+	const closeMenu = () => { if (menu) { menu.remove(); menu = null; } };
+
+	document.addEventListener('click', closeMenu);
+	document.addEventListener('scroll', () => { closeHint(); closeMenu(); }, true);
+	body.addEventListener('mouseleave', closeHint);
+
+	body.addEventListener('mouseover', (e) => {
+		closeHint();
+
+		const g = e.target.closest && e.target.closest('[data-cell-id]');
+
+		if (!g) return;
+
+		const html = g.getAttribute('data-hintbox-html');
+		const preload = g.getAttribute('data-hintbox-preload');
+
+		if (!html && !preload) return;
+
+		hint = document.createElement('div');
+		hint.className = 'pv-hint';
+		hint.innerHTML = html || '<i>native hintbox — shown on the live instance</i>';
+		document.body.appendChild(hint);
+
+		const r = g.getBoundingClientRect();
+		hint.style.left = r.left + 'px';
+		hint.style.top = (r.bottom + 6) + 'px';
+	});
+
+	body.addEventListener('contextmenu', (e) => {
+		const g = e.target.closest && e.target.closest('[data-cell-id]');
+
+		if (!g) return;
+
+		let items = null;
+
+		if (Array.isArray(g._drawio_links) && g._drawio_links.length) {
+			items = g._drawio_links.map((l) => ({label: l.label || l.url, url: l.url, target: l.target}));
+		}
+		else if (g.hasAttribute('data-menu-popup')) {
+			let spec = {};
+			try { spec = JSON.parse(g.getAttribute('data-menu-popup')); } catch (_) {}
+			items = [{label: '▸ native ' + (spec.type || '') + ' menu — live instance only', disabled: true}];
+		}
+
+		if (!items) return;
+
+		e.preventDefault();
+		closeMenu();
+
+		menu = document.createElement('div');
+		menu.className = 'pv-menu';
+
+		for (const it of items) {
+			const el = document.createElement(it.url && !it.disabled ? 'a' : 'div');
+
+			el.className = 'pv-menu-item' + (it.disabled ? ' pv-disabled' : '');
+			el.textContent = it.label;
+
+			if (it.url && !it.disabled) {
+				el.href = it.url;
+
+				if (it.target) el.target = it.target;
+			}
+
+			menu.appendChild(el);
+		}
+
+		document.body.appendChild(menu);
+		menu.style.left = e.clientX + 'px';
+		menu.style.top = e.clientY + 'px';
+	});
+})();
 </script>
 ${live ? reloadSnippet(version) : ''}
 `;

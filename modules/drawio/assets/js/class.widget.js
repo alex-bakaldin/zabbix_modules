@@ -11,8 +11,9 @@
  *
  * Script contract — (hosts, cells, api):
  *   hosts — [{host, hostid, tags:[{tag,value}], macros:{'{$NAME}':value,…},
- *            items:[{key,name,value,units,value_type,tags:[{tag,value}]}],
- *            triggers:[{triggerid,description,priority,status,value,tags:[{tag,value}]}]}]
+ *            items:[{itemid,key,name,value,units,value_type,tags:[{tag,value}]}],
+ *            triggers:[{triggerid,description,priority,status,value,tags:[{tag,value}],
+ *                       event_hint?}]}]   // event_hint: ready preload for hint (open problem only)
  *   cells — { get(id), byLabel(text), find(fn), all }
  *           handle → { id, label, bbox, neighbors:[id], source, target, set(patch),
  *                      clone({id,dx,dy,patch,edges}), repeat(list,{cols,gap,edges},fn),
@@ -22,7 +23,9 @@
  *                    end isn't attached to a node. Non-connector cells: both null.
  *           patch  → { fill, stroke, strokeWidth, opacity, text,
  *                      textAngle:<deg>|'edge', animate:'pulse'|'blink'|'none',
- *                      flow:<signed speed> }
+ *                      flow:<signed speed>,
+ *                      interact:{ hint:{html|text|preload|history:{label:[itemid,…]}},
+ *                                 menu:{type,itemid|hostid|triggerid}, links:[{label,url,target}] } }
  *           edges  → true (all incident connectors) | [neighborId,…] (only those);
  *                    clone/remove also act on the lines linking the cell to its
  *                    neighbors — connectivity is recovered from SVG geometry.
@@ -43,9 +46,23 @@ class WidgetDrawio extends CWidget {
 		this._pending = new Map();
 		this._req_seq = 0;
 		this._onMessage = this._onMessage.bind(this);
+
+		this._time_period = null;
+	}
+
+	// The chart hints (hint.history) need the widget's time period on the client.
+	// Tell the framework we consume it: when the field isn't a reference (custom
+	// range), flag it so the controller resolves our own period.
+	getUpdateRequestData() {
+		return {
+			...super.getUpdateRequestData(),
+			has_custom_time_period: this.getFieldsReferredData().has('time_period') ? undefined : 1
+		};
 	}
 
 	setContents(response) {
+		this._bindInteraction();
+
 		const diagram = response.diagram || '';
 
 		if (diagram !== this._diagram_src) {
@@ -70,12 +87,22 @@ class WidgetDrawio extends CWidget {
 			}
 		}
 
+		this._time_period = response.time_period || null;
 		this._script = response.script || '';
 		this._apply(response.hosts || []);
 	}
 
 	onDestroy() {
 		super.onDestroy();
+
+		if (this._interaction_bound) {
+			this._body.removeEventListener('contextmenu', this._onContextMenu);
+			this._body.removeEventListener('mouseover', this._onPointerOver);
+			this._body.removeEventListener('mouseout', this._onPointerOut);
+			this._interaction_bound = false;
+		}
+
+		this._destroyChart();
 
 		if (this._sandbox !== null) {
 			window.removeEventListener('message', this._onMessage);
@@ -525,6 +552,781 @@ class WidgetDrawio extends CWidget {
 		if (patch.flow != null) {
 			this._setFlow(cell, patch.flow);
 		}
+
+		if (patch.interact != null) {
+			this._setInteract(cell, patch.interact);
+		}
+	}
+
+	// --- interactivity (right-click menus, hover hints) -----------------------
+	//
+	// The script attaches a DECLARATIVE spec to a cell via set({interact:{…}}); the
+	// widget translates it into the standard Zabbix data-attributes and lets Zabbix's
+	// own global handlers do the work (AJAX, menu/hintbox rendering). No user code
+	// runs in the page context, so the sandbox model is preserved.
+	//
+	//   interact = {
+	//     hint: { html:'<b>…</b>' | text:'…'            // custom hover box (built from payload)
+	//             | preload:{type:'eventlist'|'actionlist', data:{…}} },  // native (advanced)
+	//     menu: { type:'item'|'host'|'trigger',         // native context menu (right click)
+	//             itemid|hostid|triggerid:<id> },
+	//     links: [ { label, url, target } ]             // custom menu (client-built, no server)
+	//   }
+	//
+	// Like animate/flow, the attributes are STICKY across refreshes — set({interact:{}})
+	// clears them.
+	_setInteract(cell, spec) {
+		// Clear anything a previous refresh left, so the spec is authoritative.
+		cell.removeAttribute('data-menu-popup');
+		cell.removeAttribute('data-hintbox');
+		cell.removeAttribute('data-hintbox-html');
+		cell.removeAttribute('data-hintbox-preload');
+		cell.removeAttribute('data-hintbox-style');
+		cell._drawio_links = null;
+		cell._drawio_history = null;
+		cell.style.cursor = '';
+
+		if (window.jQuery) {
+			jQuery(cell).removeData('menu-popup').removeData('hintbox-preload');
+		}
+
+		if (!spec || typeof spec !== 'object') {
+			return;
+		}
+
+		let interactive = false;
+
+		// Hover hint — reuses Zabbix's global [data-hintbox=1] handler.
+		const hint = spec.hint;
+
+		if (hint && typeof hint === 'object') {
+			// Chart hint — a live, tabbed history graph we draw ourselves (our own
+			// hover popup, not Zabbix's hintbox). Takes precedence over html/preload.
+			if (hint.history && typeof hint.history === 'object') {
+				cell._drawio_history = this._normalizeHistory(hint.history);
+
+				if (cell._drawio_history !== null) {
+					interactive = true;
+				}
+			}
+			else {
+				let html = null;
+
+				if (typeof hint.html === 'string') {
+					html = hint.html;
+				}
+				else if (typeof hint.text === 'string') {
+					html = this._escapeHtml(hint.text).replace(/\n/g, '<br>');
+				}
+
+				if (html !== null) {
+					cell.setAttribute('data-hintbox', '1');
+					cell.setAttribute('data-hintbox-html', html);
+					interactive = true;
+				}
+				else if (hint.preload && typeof hint.preload === 'object') {
+					cell.setAttribute('data-hintbox', '1');
+					this._loadPreloadHint(cell, hint.preload);
+					interactive = true;
+				}
+			}
+		}
+
+		// Right-click menu — native (server-built) via data-menu-popup, opened by our
+		// own contextmenu shim (Zabbix binds data-menu-popup to LEFT click).
+		const menu = spec.menu;
+
+		if (menu && typeof menu === 'object' && typeof menu.type === 'string') {
+			const data = this._nativeMenuData(menu);
+
+			if (data !== null) {
+				const popup = {type: menu.type, data};
+
+				// item/trigger menus build config urls that need a top-level `context`
+				// (Zabbix reads data.context) — without it the target page rejects "".
+				if (menu.type !== 'host') {
+					popup.context = menu.context || 'host';
+				}
+
+				cell.setAttribute('data-menu-popup', JSON.stringify(popup));
+				interactive = true;
+			}
+		}
+
+		// Right-click menu — custom links (client-built, no server round-trip).
+		if (Array.isArray(spec.links) && spec.links.length) {
+			cell._drawio_links = spec.links.filter((l) => l && typeof l.url === 'string');
+
+			if (cell._drawio_links.length) {
+				interactive = true;
+			}
+		}
+
+		if (interactive) {
+			cell.style.cursor = 'pointer';
+		}
+	}
+
+	// A native preload hint (event list / action list) is CLICK-only in vanilla Zabbix:
+	// its hover path needs a non-empty data-hintbox-html, which the preload path forbids.
+	// To honour it as a HOVER hint we fetch the server-rendered HTML ourselves (same
+	// endpoint Zabbix uses) and feed it to the standard hintbox. Cached per spec so we
+	// don't re-request on every refresh; a changed spec (e.g. a new problem's eventid)
+	// re-fetches.
+	_loadPreloadHint(cell, preload) {
+		const key = JSON.stringify(preload);
+
+		if (cell._drawio_hint_key === key && cell._drawio_hint_html != null) {
+			cell.setAttribute('data-hintbox-html', cell._drawio_hint_html);
+
+			return;
+		}
+
+		const action = preload.action
+			|| (preload.type === 'eventlist' ? 'hintbox.eventlist'
+				: preload.type === 'eventactions' ? 'hintbox.actionlist' : null);
+
+		if (action === null || !window.jQuery) {
+			return;
+		}
+
+		cell._drawio_hint_key = key;
+		cell._drawio_hint_html = null;
+
+		jQuery.ajax({
+			url: 'zabbix.php?action=' + action,
+			method: 'POST',
+			data: preload.data || {},
+			dataType: 'json'
+		}).done((resp) => {
+			// A later refresh may have re-pointed this cell — don't clobber it.
+			if (cell._drawio_hint_key !== key) {
+				return;
+			}
+
+			const html = (resp && resp.error)
+				? this._escapeHtml((resp.error.messages || []).join(' ') || 'Error')
+				: ((resp && resp.messages) || '') + ((resp && resp.data) || '') + ((resp && resp.value) || '');
+
+			cell._drawio_hint_html = html;
+			cell.setAttribute('data-hintbox-html', html);
+		});
+	}
+
+	// Build the `data` payload the menu.popup controller expects per type.
+	// backurl (item/trigger) returns the user here after a menu action; it must be
+	// a LOCAL (relative) url — the controller rejects an absolute one as access-denied.
+	_nativeMenuData(menu) {
+		switch (menu.type) {
+			case 'item':
+			case 'item_prototype':
+				return menu.itemid != null
+					? {itemid: String(menu.itemid), backurl: this._backurl()}
+					: null;
+
+			case 'host':
+				return menu.hostid != null ? {hostid: String(menu.hostid)} : null;
+
+			case 'trigger':
+				return menu.triggerid != null
+					? {triggerid: String(menu.triggerid), backurl: this._backurl()}
+					: null;
+
+			default:
+				return null;
+		}
+	}
+
+	// Current page as a local url (filename + query), the form Zabbix's own menus use.
+	_backurl() {
+		return location.pathname.split('/').pop() + location.search;
+	}
+
+	// Delegated listeners for the whole diagram: contextmenu drives right-click menus;
+	// mouseover/out drive the chart hint popup. Text/html/preload hover hints need no
+	// listener — Zabbix's global [data-hintbox=1] handler covers those.
+	_bindInteraction() {
+		if (this._interaction_bound) {
+			return;
+		}
+
+		this._onContextMenu = this._onContextMenu.bind(this);
+		this._onPointerOver = this._onPointerOver.bind(this);
+		this._onPointerOut = this._onPointerOut.bind(this);
+		this._body.addEventListener('contextmenu', this._onContextMenu);
+		this._body.addEventListener('mouseover', this._onPointerOver);
+		this._body.addEventListener('mouseout', this._onPointerOut);
+		this._interaction_bound = true;
+	}
+
+	_onContextMenu(e) {
+		// In dashboard edit mode leave the browser/widget context menu alone.
+		if (this.isEditMode && this.isEditMode()) {
+			return;
+		}
+
+		const target = e.target;
+
+		if (!target || !target.closest) {
+			return;
+		}
+
+		const cell = target.closest('[data-cell-id]');
+
+		if (cell === null) {
+			return;
+		}
+
+		// Custom links take precedence over a native menu on the same cell.
+		if (Array.isArray(cell._drawio_links) && cell._drawio_links.length) {
+			e.preventDefault();
+			this._showLinksMenu(cell, e);
+
+			return;
+		}
+
+		if (cell.hasAttribute('data-menu-popup')) {
+			e.preventDefault();
+
+			// Re-fire Zabbix's own [data-menu-popup] handler (bound to left click) by
+			// dispatching a REAL click at the cursor: detail:1 + client coords make
+			// Zabbix position the menu at the pointer (its positioner uses the event
+			// only when originalEvent.detail is truthy — a synthetic jQuery event isn't).
+			e.target.dispatchEvent(new MouseEvent('click', {
+				bubbles: true,
+				cancelable: true,
+				view: window,
+				button: 0,
+				detail: 1,
+				clientX: e.clientX,
+				clientY: e.clientY
+			}));
+		}
+	}
+
+	_showLinksMenu(cell, e) {
+		if (!window.jQuery) {
+			return;
+		}
+
+		const items = cell._drawio_links.map((l) => {
+			const item = {label: String(l.label != null ? l.label : l.url), url: String(l.url)};
+
+			if (typeof l.target === 'string') {
+				item.target = l.target;
+			}
+
+			return item;
+		});
+
+		// Position the menu at the cursor: pass an explicit position anchored to the
+		// contextmenu event (its pageX/pageY), overriding menuPopup's default which
+		// would otherwise place it off the element.
+		jQuery(cell).menuPopup([{items}], jQuery.Event(e), {
+			position: {of: e, my: 'left top', at: 'left top', collision: 'fit'}
+		});
+	}
+
+	// --- chart hints (live, tabbed history graph) -----------------------------
+	//
+	// hint.history = { '<Tab label>': [itemid, …], … }. On hover we open our own
+	// popup with one tab per label and draw a Canvas line chart of each item's
+	// history over the widget's time period. History is fetched on demand in time
+	// chunks, newest first, and the chart is redrawn as each chunk lands — so a
+	// heavy query paints progressively instead of blocking.
+
+	HISTORY_LIMIT = 500;      // values per history request (page size)
+	HISTORY_MAX_ROUNDS = 20;  // safety cap on backward pages
+	CHART_W = 380;
+	CHART_H = 190;
+	CHART_PALETTE = ['#3a8fd6', '#e0743a', '#43a047', '#c0554f', '#8e6fc9', '#d6b13a', '#0f9b8e', '#b0679b'];
+
+	// Normalize { label: [itemid,…] } into an ordered [{label, itemids:[str,…]}];
+	// null if nothing plottable.
+	_normalizeHistory(spec) {
+		const tabs = [];
+
+		for (const label of Object.keys(spec)) {
+			const raw = spec[label];
+			const ids = (Array.isArray(raw) ? raw : [raw])
+				.map((x) => String(x))
+				.filter((x) => x !== '' && x !== 'null' && x !== 'undefined');
+
+			if (ids.length) {
+				tabs.push({label: String(label), itemids: ids});
+			}
+		}
+
+		return tabs.length ? tabs : null;
+	}
+
+	_onPointerOver(e) {
+		if (this.isEditMode && this.isEditMode()) {
+			return;
+		}
+
+		const cell = (e.target && e.target.closest) ? e.target.closest('[data-cell-id]') : null;
+
+		if (cell === null || !Array.isArray(cell._drawio_history)) {
+			return;
+		}
+
+		if (this._chart_cell === cell) {
+			this._chartCancelHide();
+
+			return;
+		}
+
+		if (this._chart_pending_cell === cell) {
+			return;
+		}
+
+		this._chartCancelHide();
+		clearTimeout(this._chart_show_timer);
+		this._chart_pending_cell = cell;
+
+		const ev = {clientX: e.clientX, clientY: e.clientY};
+
+		this._chart_show_timer = setTimeout(() => {
+			this._chart_pending_cell = null;
+			this._showChart(cell, ev);
+		}, 350);
+	}
+
+	_onPointerOut(e) {
+		const to = e.relatedTarget;
+
+		// Moving into the popup keeps it open (the popup has its own enter/leave).
+		if (this._chart && to && this._chart.el.contains(to)) {
+			return;
+		}
+
+		const cell = (e.target && e.target.closest) ? e.target.closest('[data-cell-id]') : null;
+
+		// Still within the same cell — ignore the internal move.
+		if (cell !== null && to && cell.contains(to)) {
+			return;
+		}
+
+		clearTimeout(this._chart_show_timer);
+		this._chart_pending_cell = null;
+		this._scheduleChartHide();
+	}
+
+	_chartCancelHide() {
+		clearTimeout(this._chart_hide_timer);
+	}
+
+	_scheduleChartHide() {
+		clearTimeout(this._chart_hide_timer);
+		this._chart_hide_timer = setTimeout(() => this._hideChart(), 250);
+	}
+
+	_ensureChartPopup() {
+		if (this._chart) {
+			return this._chart;
+		}
+
+		const el = document.createElement('div');
+
+		el.className = 'drawio-charthint';
+		el.style.display = 'none';
+
+		const tabs = document.createElement('div');
+		const body = document.createElement('div');
+		const canvas = document.createElement('canvas');
+		const legend = document.createElement('div');
+
+		tabs.className = 'dch-tabs';
+		body.className = 'dch-body';
+		legend.className = 'dch-legend';
+		body.appendChild(canvas);
+		el.appendChild(tabs);
+		el.appendChild(body);
+		el.appendChild(legend);
+		document.body.appendChild(el);
+
+		el.addEventListener('mouseenter', () => this._chartCancelHide());
+		el.addEventListener('mouseleave', () => this._scheduleChartHide());
+
+		this._chart = {el, tabs, canvas, legend, cell: null, active: 0, loading: false};
+
+		return this._chart;
+	}
+
+	_showChart(cell, ev) {
+		const spec = cell._drawio_history;
+
+		if (!Array.isArray(spec)) {
+			return;
+		}
+
+		const chart = this._ensureChartPopup();
+
+		this._chart_cell = cell;
+		chart.cell = cell;
+
+		// (Re)build the per-tab data cache, keyed by the tabs + time period.
+		const sig = JSON.stringify({t: spec.map((t) => t.itemids), p: this._time_period});
+
+		if (cell._chart_sig !== sig) {
+			cell._chart_sig = sig;
+			cell._chart_data = spec.map(() => ({}));
+			cell._chart_loaded = spec.map(() => false);
+			cell._chart_token = (cell._chart_token || 0) + 1;
+		}
+
+		// Tab bar (hidden when a single tab).
+		chart.tabs.innerHTML = '';
+		chart.tabs.style.display = spec.length > 1 ? '' : 'none';
+
+		spec.forEach((t, i) => {
+			const b = document.createElement('button');
+
+			b.type = 'button';
+			b.className = 'dch-tab';
+			b.textContent = t.label;
+			b.addEventListener('click', () => this._activateTab(cell, i));
+			chart.tabs.appendChild(b);
+		});
+
+		chart.el.style.display = '';
+		this._activateTab(cell, 0);
+		this._positionChart(cell, ev);
+	}
+
+	_activateTab(cell, i) {
+		const chart = this._chart;
+
+		if (!chart || chart.cell !== cell) {
+			return;
+		}
+
+		chart.active = i;
+		Array.from(chart.tabs.children).forEach((b, j) => b.classList.toggle('dch-active', j === i));
+
+		chart.loading = !cell._chart_loaded[i];
+		this._drawChart(cell._chart_data[i], cell._chart_loaded[i]);
+
+		if (!cell._chart_loaded[i]) {
+			this._loadChart(cell, i);
+		}
+	}
+
+	// Fetch one tab's history in time chunks, newest first, redrawing as each lands.
+	_loadChart(cell, tab_index) {
+		if (!window.jQuery) {
+			return;
+		}
+
+		const tab = cell._drawio_history[tab_index];
+		const now = Math.floor(Date.now() / 1000);
+		const period = this._time_period || {from: now - 3600, to: now};
+		const from = period.from;
+		const token = cell._chart_token;
+
+		const done = () => {
+			cell._chart_loaded[tab_index] = true;
+
+			if (this._chart && this._chart.cell === cell && this._chart.active === tab_index) {
+				this._chart.loading = false;
+				this._drawChart(cell._chart_data[tab_index], true);
+			}
+		};
+
+		// Page backwards by VALUE COUNT, not by time: each request returns the newest
+		// `HISTORY_LIMIT` values down to `time_till`, and the next continues from the
+		// oldest one received. Robust to throttled/sparse items where equal time slices
+		// would come back empty or lopsided.
+		const fetchPage = (time_till, round) => {
+			if (cell._chart_token !== token) {
+				return;
+			}
+
+			if (round >= this.HISTORY_MAX_ROUNDS || time_till < from) {
+				done();
+
+				return;
+			}
+
+			jQuery.ajax({
+				url: 'zabbix.php?action=widget.drawio.history',
+				method: 'POST',
+				dataType: 'json',
+				data: {itemids: tab.itemids, time_from: from, time_till, limit: this.HISTORY_LIMIT}
+			}).done((resp) => {
+				if (cell._chart_token !== token) {
+					return;
+				}
+
+				const store = cell._chart_data[tab_index];
+				const items = (resp && resp.items) || {};
+
+				for (const id of Object.keys(items)) {
+					if (!store[id]) {
+						store[id] = {name: items[id].name, units: items[id].units, points: []};
+					}
+
+					// Each page is older than what we have — prepend to stay oldest-first.
+					store[id].points = items[id].points.concat(store[id].points);
+				}
+
+				if (this._chart && this._chart.cell === cell && this._chart.active === tab_index) {
+					this._drawChart(store, false);
+				}
+
+				const oldest = (resp && resp.oldest != null) ? resp.oldest : null;
+
+				if (resp && resp.truncated && oldest !== null && oldest > from) {
+					fetchPage(oldest - 1, round + 1);
+				}
+				else {
+					done();
+				}
+			}).fail(done);
+		};
+
+		fetchPage(period.to, 0);
+	}
+
+	_positionChart(cell, ev) {
+		const chart = this._chart;
+		const rect = cell.getBoundingClientRect();
+		const w = chart.el.offsetWidth || this.CHART_W;
+		const h = chart.el.offsetHeight || this.CHART_H;
+		const vw = document.documentElement.clientWidth;
+		const vh = document.documentElement.clientHeight;
+
+		let left = ev ? ev.clientX + 14 : rect.left;
+		let top = ev ? ev.clientY + 14 : rect.bottom + 8;
+
+		if (left + w > vw - 8) {
+			left = Math.max(8, (ev ? ev.clientX : rect.right) - w - 14);
+		}
+
+		if (top + h > vh - 8) {
+			top = Math.max(8, (ev ? ev.clientY : rect.top) - h - 14);
+		}
+
+		chart.el.style.left = left + 'px';
+		chart.el.style.top = top + 'px';
+	}
+
+	_drawChart(store, loaded) {
+		const chart = this._chart;
+
+		if (!chart) {
+			return;
+		}
+
+		const w = this.CHART_W;
+		const h = this.CHART_H;
+		const dpr = window.devicePixelRatio || 1;
+		const canvas = chart.canvas;
+
+		canvas.width = w * dpr;
+		canvas.height = h * dpr;
+		canvas.style.width = w + 'px';
+		canvas.style.height = h + 'px';
+
+		const ctx = canvas.getContext('2d');
+
+		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		ctx.clearRect(0, 0, w, h);
+
+		const dark = this._isChartDark();
+
+		chart.el.classList.toggle('dch-dark', dark);
+
+		const fg = dark ? '#c8d6e5' : '#33404d';
+		const grid = dark ? 'rgba(200,214,229,0.13)' : 'rgba(51,64,77,0.12)';
+		const axis = dark ? 'rgba(200,214,229,0.4)' : 'rgba(51,64,77,0.4)';
+
+		const series = Object.keys(store || {})
+			.map((id) => store[id])
+			.filter((s) => s.points && s.points.length);
+
+		if (!series.length) {
+			ctx.fillStyle = fg;
+			ctx.font = '12px system-ui, sans-serif';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.fillText(loaded ? 'No data' : 'Loading…', w / 2, h / 2);
+			chart.legend.innerHTML = '';
+
+			return;
+		}
+
+		const period = this._time_period;
+		let xmin = period ? period.from : Infinity;
+		let xmax = period ? period.to : -Infinity;
+
+		if (!period) {
+			series.forEach((s) => s.points.forEach((p) => {
+				if (p[0] < xmin) xmin = p[0];
+				if (p[0] > xmax) xmax = p[0];
+			}));
+		}
+
+		let ymin = Infinity;
+		let ymax = -Infinity;
+
+		series.forEach((s) => s.points.forEach((p) => {
+			if (p[1] < ymin) ymin = p[1];
+			if (p[1] > ymax) ymax = p[1];
+		}));
+
+		if (ymin === ymax) {
+			ymin -= 1;
+			ymax += 1;
+		}
+
+		const ypad = (ymax - ymin) * 0.08;
+
+		ymin -= ypad;
+		ymax += ypad;
+
+		const padL = 46;
+		const padR = 10;
+		const padT = 8;
+		const padB = 20;
+		const plotW = w - padL - padR;
+		const plotH = h - padT - padB;
+		const X = (t) => padL + (xmax === xmin ? 0 : (t - xmin) / (xmax - xmin)) * plotW;
+		const Y = (v) => padT + (1 - (v - ymin) / (ymax - ymin)) * plotH;
+
+		// Horizontal grid + Y labels.
+		ctx.font = '10px system-ui, sans-serif';
+		ctx.textBaseline = 'middle';
+		ctx.textAlign = 'right';
+		ctx.lineWidth = 1;
+
+		const rows = 4;
+
+		for (let i = 0; i <= rows; i++) {
+			const v = ymin + (ymax - ymin) * i / rows;
+			const y = Y(v);
+
+			ctx.strokeStyle = grid;
+			ctx.beginPath();
+			ctx.moveTo(padL, y);
+			ctx.lineTo(w - padR, y);
+			ctx.stroke();
+
+			ctx.fillStyle = fg;
+			ctx.fillText(this._fmtNum(v), padL - 5, y);
+		}
+
+		// X labels (start / end of the period).
+		const show_date = (xmax - xmin) > 2 * 86400;
+
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'top';
+		ctx.fillStyle = fg;
+		ctx.fillText(this._fmtTime(xmin, show_date), padL, h - padB + 5);
+		ctx.textAlign = 'right';
+		ctx.fillText(this._fmtTime(xmax, show_date), w - padR, h - padB + 5);
+
+		// Axes.
+		ctx.strokeStyle = axis;
+		ctx.beginPath();
+		ctx.moveTo(padL, padT);
+		ctx.lineTo(padL, padT + plotH);
+		ctx.lineTo(w - padR, padT + plotH);
+		ctx.stroke();
+
+		// Series.
+		ctx.lineJoin = 'round';
+
+		series.forEach((s, si) => {
+			ctx.strokeStyle = this.CHART_PALETTE[si % this.CHART_PALETTE.length];
+			ctx.lineWidth = 1.5;
+			ctx.beginPath();
+			s.points.forEach((p, i) => {
+				const x = X(p[0]);
+				const y = Y(p[1]);
+
+				if (i === 0) {
+					ctx.moveTo(x, y);
+				}
+				else {
+					ctx.lineTo(x, y);
+				}
+			});
+			ctx.stroke();
+		});
+
+		// Legend (HTML, with the latest value per series).
+		chart.legend.innerHTML = '';
+
+		series.forEach((s, si) => {
+			const last = s.points[s.points.length - 1];
+			const val = last ? this._fmtNum(last[1]) + (s.units ? ' ' + s.units : '') : '';
+			const item = document.createElement('span');
+
+			item.className = 'dch-leg';
+			item.innerHTML = '<i style="background:' + this.CHART_PALETTE[si % this.CHART_PALETTE.length] + '"></i>'
+				+ '<b></b><em></em>';
+			item.querySelector('b').textContent = s.name;
+			item.querySelector('em').textContent = val;
+			chart.legend.appendChild(item);
+		});
+	}
+
+	_hideChart() {
+		clearTimeout(this._chart_hide_timer);
+		this._chart_cell = null;
+
+		if (this._chart) {
+			this._chart.el.style.display = 'none';
+			this._chart.cell = null;
+		}
+	}
+
+	_destroyChart() {
+		clearTimeout(this._chart_show_timer);
+		clearTimeout(this._chart_hide_timer);
+
+		if (this._chart) {
+			this._chart.el.remove();
+			this._chart = null;
+		}
+
+		this._chart_cell = null;
+		this._chart_pending_cell = null;
+	}
+
+	_isChartDark() {
+		const html = document.documentElement;
+		const cs = html.getAttribute('color-scheme');
+
+		if (cs === 'dark') {
+			return true;
+		}
+
+		if (cs === 'light') {
+			return false;
+		}
+
+		return /dark/.test(html.getAttribute('theme') || '');
+	}
+
+	_fmtNum(v) {
+		const a = Math.abs(v);
+
+		if (a !== 0 && (a >= 100000 || a < 0.01)) {
+			return v.toPrecision(3);
+		}
+
+		return String(Math.round(v * 100) / 100);
+	}
+
+	_fmtTime(ts, show_date) {
+		const d = new Date(ts * 1000);
+		const p = (n) => (n < 10 ? '0' : '') + n;
+		const hm = p(d.getHours()) + ':' + p(d.getMinutes());
+
+		return show_date ? (p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + hm) : hm;
 	}
 
 	// A named CSS animation on the whole cell. Kept alive by the browser between
@@ -805,9 +1607,13 @@ class WidgetDrawio extends CWidget {
 			+ 'while(Math.abs(v)>=base&&p<8){v/=base;p++;}'
 			+ 'var sf=(p===0?"":pre.charAt(p-1))+u;'
 			+ 'return String(parseFloat(v.toFixed(dec)))+(sf?" "+sf:"");}'
-			+ 'function clean(p){var o={};if(p&&typeof p==="object")'
+			+ 'function clean(p){var o={};if(p&&typeof p==="object"){'
 			+ '["fill","stroke","strokeWidth","opacity","text","textAngle","animate","flow"].forEach(function(k){var v=p[k];'
-			+ 'if(typeof v==="number"||typeof v==="string"||typeof v==="boolean")o[k]=v;});return o;}'
+			+ 'if(typeof v==="number"||typeof v==="string"||typeof v==="boolean")o[k]=v;});'
+			// interact is a declarative object (hint/menu/links) — carried across the
+			// sandbox as pure JSON (no code); the parent interprets known fields only.
+			+ 'if(p.interact&&typeof p.interact==="object"){try{o.interact=JSON.parse(JSON.stringify(p.interact));}catch(e){}}'
+			+ '}return o;}'
 			+ 'function edg(e){return e===true?true:(Array.isArray(e)?e.filter(function(x){return typeof x==="string";}):false);}'
 			+ 'function build(model){var ops=[],seq=0,byId={};model.forEach(function(c){byId[c.id]=c;});'
 			+ 'function handle(id,info){var h={id:id,label:info?info.label:"",'

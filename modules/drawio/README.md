@@ -45,6 +45,15 @@ natively in the light Zabbix theme too.
 - **Animation:** values transition smoothly on each refresh, and cells can carry
   a browser-run animation (`pulse` / `blink`, or flowing dashes along a pipe) —
   the script only toggles it, so nothing loops in the sandbox.
+- **Interactive:** a cell can carry a **right-click context menu** and a **hover
+  hint**. Point them at an item/host/trigger to get Zabbix's own native menu
+  (Latest data, Graph, Triggers, scripts…) and popups, or build a custom hint and
+  custom links yourself — declared as data, so no extra code runs on the page.
+- **Chart hints:** a hover hint can be a **live, tabbed history graph** of any items
+  (`hint.history`) — drawn on a Canvas from the raw history, over the widget's time
+  period, loaded progressively in pages of up to 500 values (newest first, each
+  continuing from the last — robust to throttled data). Something Zabbix has no native
+  equivalent for inside a diagram.
 - **Chunked storage:** the SVG and the script are split transparently across
   several `widget_field` rows, so neither is bounded by the 64 KB column.
 - **Sandboxed & DoS-safe:** the script runs in an isolated iframe + Worker — no
@@ -121,6 +130,7 @@ Load the resulting SVG into the widget's **Diagram SVG** field — pick the file
 | **Item patterns** | which items to resolve and inject |
 | **Item tags** | tag filter (And/Or) |
 | **Override host** | dynamic/override host for template dashboards |
+| **Time period** | range for the chart hints (`hint.history`) — follows the dashboard, a custom range, or another widget |
 
 ### The editing form
 
@@ -149,8 +159,9 @@ Contract — the script body runs as `(hosts, cells, api)`:
 [
   { host: 'Router A', hostid: '10105', tags: [ { tag, value }, … ],
     macros: { '{$SNMP_COMMUNITY}': 'public', '{$TEMP.CRIT}': '85', … },
-    items:    [ { key, name, value, units, value_type, clock, tags: [ { tag, value }, … ] }, … ],
-    triggers: [ { triggerid, description, priority, status, value, tags: [ { tag, value }, … ] }, … ] }
+    items:    [ { itemid, key, name, value, units, value_type, clock, tags: [ { tag, value }, … ] }, … ],
+    triggers: [ { triggerid, description, priority, status, value, tags: [ { tag, value }, … ],
+                  event_hint }, … ] }
 ]
 ```
 
@@ -219,6 +230,7 @@ until you change it — clear it explicitly when a condition ends (`animate: 'no
   | `textAngle` | number \| `'edge'` | Rotate the label N degrees, or `'edge'` = parallel to the connector line (auto-flipped upright). |
   | `animate` | `'pulse'` \| `'blink'` \| `'none'` | Browser-run animation of the cell. |
   | `flow` | number | Flowing dashes along the cell's lines: sign = direction (**positive runs `source`→`target`**, the drawn direction), magnitude = speed, `0`/`false` = stop. |
+  | `interact` | object | Right-click menu and/or hover hint for the cell (see **interact** below). `{}` clears it. |
 
   A **color** is a CSS colour string, or 6 hex digits with or without `#` (`'#e05050'` = `'e05050'`).
 
@@ -251,6 +263,40 @@ clone, each connector is re-routed as a straight line — its far end stays put,
 end follows the clone — so a fan-out of clones each keeps its own line to the shared
 parent. Connectivity is inferred from the SVG geometry (no embedded draw.io model
 needed); routed waypoints become straight.
+
+**`interact`** (a `set({interact})` value): make the cell respond to the pointer. It is
+a plain declaration — the widget turns it into Zabbix's standard behaviour, so **no user
+code runs on the page** (the sandbox model is preserved). Like other patch fields it is
+**sticky**; pass `{}` to clear it.
+
+```js
+cells.get('reactor').set({ interact: {
+  hint: { html: '<b>' + item.name + '</b><br>' + item.value + ' ' + item.units },
+  menu: { type: 'item', itemid: item.itemid }
+}});
+```
+
+- **`hint`** — hover popup. `{ html }` or `{ text }` renders your own content (built from
+  the payload, no server round-trip). `{ preload: { type, data } }` shows a **native,
+  server-rendered** hintbox — the widget fetches its HTML for you: `type: 'eventlist'`
+  (a trigger's problem/event list) or `type: 'eventactions'` (an event's action history),
+  or `action: '<hintbox.*>'` to hit any hintbox endpoint directly. For a trigger's current
+  problems there's a ready-made spec on every trigger: `hint: { preload: trigger.event_hint }`
+  (present only while the trigger has an open problem).
+  `{ history: { '<Tab>': [itemid, …], … } }` shows a **live history chart** instead — one
+  tab per label, each plotting its items over the widget's **Time period** (configured on
+  the form). We draw it on a Canvas from the raw history, fetched in pages of up to 500
+  values (newest first, each page continuing from the last) so a heavy or throttled query
+  paints progressively. Example:
+  `hint: { history: { 'CPU': [it['cpu'].itemid], 'Net': [it['in'].itemid, it['out'].itemid] } }`.
+- **`menu`** — **right-click** context menu, native to Zabbix:
+  `{ type: 'item', itemid }`, `{ type: 'host', hostid }` or `{ type: 'trigger', triggerid }`.
+  You get the same menu as everywhere in Zabbix (Latest data, Graph, Triggers, host
+  scripts…), which fetches its own data on demand.
+- **`links`** — a custom right-click menu built entirely by you: `[{ label, url, target }]`.
+  Takes precedence over `menu` on the same cell. Use it for jumps to any URL.
+
+The ids come from the injected data: `item.itemid`, `host.hostid`, `trigger.triggerid`.
 
 ### `api` — helper functions
 

@@ -4,15 +4,24 @@
     "type": "widget",
     "name": "Diagram (draw.io/SVG)",
     "namespace": "Drawio",
-    "version": "1.4",
+    "version": "1.6",
     "author": "Alex Bakaldin",
     "actions": {
         "widget.drawio.view": {
             "class": "WidgetView"
+        },
+        "widget.drawio.history": {
+            "class": "HistoryData",
+            "layout": "layout.json"
         }
     },
     "widget": {
-        "js_class": "WidgetDrawio"
+        "js_class": "WidgetDrawio",
+        "in": {
+            "time_period": {
+                "type": "_timeperiod"
+            }
+        }
     },
     "assets": {
         "css": ["widget.css"],

@@ -119,6 +119,7 @@ priekšskatījums) vai ielīmējiet avotu.
 | **Item patterns** | kurus vienumus atrisināt un iesūtīt |
 | **Item tags** | filtrs pēc tagiem (And/Or) |
 | **Override host** | dinamiskais/aizstājošais resursdators šablonu paneļiem |
+| **Time period** | diapazons diagrammu mājieniem (`hint.history`) — panelis, pielāgots diapazons vai cits logrīks |
 
 ### Rediģēšanas forma
 
@@ -147,8 +148,8 @@ Līgums — skripta ķermenis izpildās kā `(hosts, cells, api)`:
 [
   { host: 'Router A', hostid: '10105', tags: [ { tag, value }, … ],
     macros: { '{$SNMP_COMMUNITY}': 'public', '{$TEMP.CRIT}': '85', … },
-    items:    [ { key, name, value, units, value_type, clock, tags: [ { tag, value }, … ] }, … ],
-    triggers: [ { triggerid, description, priority, status, value, tags: [ { tag, value }, … ] }, … ] }
+    items:    [ { itemid, key, name, value, units, value_type, clock, tags: [ { tag, value }, … ] }, … ],
+    triggers: [ { triggerid, description, priority, status, value, tags: […], event_hint }, … ] }
 ]
 ```
 
@@ -177,7 +178,7 @@ handle.bbox         // { x, y, width, height }
 handle.neighbors    // [id, …]  šūnas, kas ar šo savienotas ar savienotāju
 handle.source       // savienotājam: mezgla id līnijas SĀKUMĀ (draw.io source; null, ja gals nav piesaistīts)
 handle.target       // savienotājam: mezgla id līnijas BEIGĀS (draw.io target; null, ja nav piesaistīts)
-handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow }
+handle.set(patch)   // patch: { fill, stroke, strokeWidth, opacity, text, textAngle, animate, flow, interact }
 handle.clone({ id?, dx?, dy?, patch?, edges? })   // klons ar nobīdi; atgriež jaunu handle
 handle.repeat(list, { cols, gap, edges }, fn)     // klons katram vienumam, režģī; fn(cell, item, i)
 handle.remove({ edges? })
@@ -294,6 +295,32 @@ if (net) cells.byLabel('eth0').set({ flow: api.scale(+net.value, 0, 1e9, 0.3, 4)
 > Tā kā īstais SVG saglabājas starp atsvaidzināšanām, animācija paliek ieslēgta, līdz
 > skripts to izslēdz — vienmēr iestatiet „izslēgts” zaru (`animate:'none'`, `flow:0`),
 > kad nosacījums vairs neizpildās.
+
+### Interaktivitāte
+
+`set({ interact })` liek šūnai reaģēt uz peli. Tā ir tīra deklarācija — logrīks to pārvērš
+par standarta Zabbix uzvedību, tāpēc **lapā netiek izpildīts nekāds lietotāja kods**. Kā
+citi lauki, tā ir **lipīga**; `{}` to notīra.
+
+```js
+cells.get('reactor').set({ interact: {
+  hint: { html: '<b>' + item.name + '</b><br>' + item.value + ' ' + item.units }, // vai { text }
+  menu: { type: 'item', itemid: item.itemid }   // vietējā Zabbix izvēlne (labais klikšķis)
+} });
+```
+
+- `hint: { html } | { text }` — savs uznirstošais mājiens, virzot peli; `{ preload: { type, data } }` —
+  vietējs, servera renderēts hintbox (logrīks pats ielādē HTML): `type:'eventlist'` (trigera
+  problēmas) vai `'eventactions'` (notikuma vēsture). Pašreizējām problēmām:
+  `hint:{ preload: trigger.event_hint }`.
+- `hint: { history: { '<Cilne>': [itemid, …], … } }` — **dzīvs vēstures grafiks** (Canvas), cilne katrai
+  etiķetei, par logrīka **Time period**; ielādē lapās līdz 500 vērtībām (vispirms jaunākās,
+  katra nākamā no pēdējās saņemtās).
+- `menu: { type:'item', itemid } | { type:'host', hostid } | { type:'trigger', triggerid }` —
+  tā pati konteksta izvēlne kā visur Zabbix (Jaunākie dati, Grafiks, Trigeri, skripti…).
+- `links: [{ label, url, target }]` — sava labā klikšķa izvēlne; tai ir priekšroka pār `menu`.
+
+Id nāk no ievadītajiem datiem: `item.itemid`, `host.hostid`, `trigger.triggerid`.
 
 ### Atkļūdošana
 

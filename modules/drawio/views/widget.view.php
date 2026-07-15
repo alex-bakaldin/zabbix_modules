@@ -13,4 +13,5 @@
     ->setVar('diagram', $data['diagram'])
     ->setVar('script', $data['script'])
     ->setVar('hosts', $data['hosts'])
+    ->setVar('time_period', $data['time_period'])
     ->show();
