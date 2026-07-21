@@ -19,7 +19,9 @@ use Modules\Drawio\Includes\CItemsHelper;
  */
 class WidgetView extends CControllerDashboardWidgetView {
 
-    private const ITEM_LIMIT = 500;
+    // Per-host cap: each resolved host gets its own item quota, so an
+    // item-heavy host can't starve the others (see CItemsHelper::resolveItems).
+    private const ITEM_LIMIT_PER_HOST = 500;
     private const TRIGGER_LIMIT = 500;
 
     protected function init(): void {
@@ -37,7 +39,8 @@ class WidgetView extends CControllerDashboardWidgetView {
             ? $this->fields_values['override_hostid'][0]
             : '';
 
-        $items = CItemsHelper::resolveItems($this->fields_values, $templateid, $override_hostid, self::ITEM_LIMIT);
+        $items = CItemsHelper::resolveItems($this->fields_values, $templateid, $override_hostid,
+            self::ITEM_LIMIT_PER_HOST);
 
         // Group items by host, reading each item's last value from HISTORY.
         $hosts = [];

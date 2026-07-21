@@ -50,14 +50,26 @@ class CItemsHelper {
             if (!$hostids) {
                 return [];
             }
-
-            $options['hostids'] = $hostids;
         }
         else {
-            $options['hostids'] = [$override_hostid !== '' ? $override_hostid : $templateid];
+            $hostids = [$override_hostid !== '' ? $override_hostid : $templateid];
         }
 
-        return API::Item()->get($options);
+        // Resolve items host-by-host, giving each host its own $limit quota.
+        //
+        // A single query over all hosts sorts by name ASC and truncates at the
+        // shared limit, so one item-heavy host consumes the whole budget and
+        // whole alphabetically-late item categories (Memory, Uptime, Version, …)
+        // silently vanish from every host. A per-host quota keeps each host's
+        // full set and confines any truncation to that host alone.
+        $items = [];
+
+        foreach ($hostids as $hostid) {
+            $options['hostids'] = [$hostid];
+            $items = array_merge($items, API::Item()->get($options));
+        }
+
+        return $items;
     }
 
     /**
